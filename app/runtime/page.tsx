@@ -5,15 +5,21 @@ import { AppSchema } from '../../packages/schema/types';
 import { MockDB } from '../../packages/mock-db';
 import { StoreProvider } from '../../packages/state-core/store';
 import { PageRenderer } from '../../packages/renderer';
+import { LanguageProvider, useTranslation } from '../../packages/i18n';
 
-export default function RuntimePage() {
+function RuntimeContent() {
+    const { t, language, setLanguage } = useTranslation();
     const [schema, setSchema] = useState<AppSchema | null>(null);
 
     useEffect(() => {
         MockDB.getSchema().then(setSchema);
     }, []);
 
-    if (!schema) return <div>Loading Runtime...</div>;
+    const toggleLang = () => {
+        setLanguage(language === 'en' ? 'zh' : 'en');
+    };
+
+    if (!schema) return <div>{t('runtime.loading')}</div>;
 
     // For MVP, just render the first page found in schema
     const homePage = schema.pages[0];
@@ -24,14 +30,22 @@ export default function RuntimePage() {
                 {/* Runtime Header */}
                 <div className="w-full max-w-4xl glass-panel rounded-full px-6 py-3 mb-8 flex justify-between items-center sticky top-4 z-50">
                     <h1 className="text-sm font-bold tracking-wider text-gray-300 uppercase">
-                        {schema.initialState.title || "Runtime Preview"}
+                        {schema.initialState.title || t('runtime.title')}
                     </h1>
-                    <a
-                        href="/studio"
-                        className="text-xs bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-1.5 rounded-full transition text-gray-300"
-                    >
-                        ← Back to Studio
-                    </a>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={toggleLang}
+                            className="text-[10px] font-bold px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-gray-400 transition"
+                        >
+                            {language.toUpperCase()}
+                        </button>
+                        <a
+                            href="/studio"
+                            className="text-xs bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-1.5 rounded-full transition text-gray-300"
+                        >
+                            ← {t('runtime.back')}
+                        </a>
+                    </div>
                 </div>
 
                 {/* Page Content */}
@@ -41,5 +55,13 @@ export default function RuntimePage() {
                 </div>
             </div>
         </StoreProvider>
+    );
+}
+
+export default function RuntimePage() {
+    return (
+        <LanguageProvider>
+            <RuntimeContent />
+        </LanguageProvider>
     );
 }
