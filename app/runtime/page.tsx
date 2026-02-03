@@ -19,29 +19,32 @@ function RuntimeContent() {
         setLanguage(language === 'en' ? 'zh' : 'en');
     };
 
-    if (!schema) return <div>{t('runtime.loading')}</div>;
+    if (!schema) return <div className="min-h-screen flex items-center justify-center text-slate-500">{t('runtime.loading')}</div>;
 
     // For MVP, just render the first page found in schema
     const homePage = schema.pages[0];
 
     return (
         <StoreProvider initialState={schema.initialState}>
-            <div className="min-h-screen bg-black text-white flex flex-col items-center p-8 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-900 via-black to-black">
+            <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col items-center p-8 font-sans relative overflow-hidden">
+                {/* Dot Grid Background */}
+                <div className="absolute inset-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none" />
+
                 {/* Runtime Header */}
-                <div className="w-full max-w-4xl glass-panel rounded-full px-6 py-3 mb-8 flex justify-between items-center sticky top-4 z-50">
-                    <h1 className="text-sm font-bold tracking-wider text-gray-300 uppercase">
+                <div className="w-full max-w-4xl bg-white/80 backdrop-blur-md border border-slate-200 rounded-full px-6 py-3 mb-8 flex justify-between items-center sticky top-4 z-50 shadow-sm">
+                    <h1 className="text-sm font-bold tracking-wider text-slate-700 uppercase font-display">
                         {schema.initialState.title || t('runtime.title')}
                     </h1>
                     <div className="flex items-center gap-3">
                         <button
                             onClick={toggleLang}
-                            className="text-[10px] font-bold px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-gray-400 transition"
+                            className="text-[10px] font-bold px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors border border-slate-200"
                         >
                             {language.toUpperCase()}
                         </button>
                         <a
                             href="/studio"
-                            className="text-xs bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-1.5 rounded-full transition text-gray-300"
+                            className="text-xs bg-primary-600 hover:bg-primary-700 text-white px-5 py-1.5 rounded-full transition-all shadow-md shadow-primary-500/20 hover:shadow-primary-500/30 font-medium"
                         >
                             ← {t('runtime.back')}
                         </a>
@@ -49,8 +52,7 @@ function RuntimeContent() {
                 </div>
 
                 {/* Page Content */}
-                <div className="w-full max-w-4xl glass-panel rounded-2xl p-8 min-h-[600px] relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-neon-purple via-neon-indigo to-neon-emerald opacity-50" />
+                <div className="w-full max-w-4xl bg-white/80 backdrop-blur-sm rounded-3xl p-8 min-h-[600px] relative overflow-hidden border border-white shadow-xl">
                     <PageRenderer schema={homePage} />
                 </div>
             </div>

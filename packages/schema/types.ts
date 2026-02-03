@@ -29,10 +29,10 @@ export interface AIAction extends BaseAction {
   outputStatePath: string; // Where to put the result
 }
 
-export type Action = 
-  | UpdateStateAction 
-  | RequestAction 
-  | NavigateAction 
+export type Action =
+  | UpdateStateAction
+  | RequestAction
+  | NavigateAction
   | AIAction;
 
 export interface ActionFlow {
@@ -43,10 +43,11 @@ export interface ActionFlow {
 
 export interface ComponentSchema {
   id: string;
-  type: 'Text' | 'Button' | 'Input'; // Extended slightly for utility
+  type: 'Text' | 'Button' | 'Input' | 'Container' | 'Image' | 'Card' | 'Divider' | 'Checkbox' | 'Switch';
   props: Record<string, any>;
   bindState?: string; // path in state
-  onEvent?: Record<string, string>; // eventName -> flowId. NOTE: Spec said 'onEvent?: string' (actionId) - assuming flowId based on "Action Flow 规范"
+  onEvent?: Record<string, string>; // eventName -> flowId
+  children?: ComponentSchema[]; // For Containers
 }
 
 export interface PageSchema {
