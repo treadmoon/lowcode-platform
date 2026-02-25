@@ -45,6 +45,7 @@ export const PageRenderer = ({
                     onEvent={handleEvent}
                     onSelect={onSelect}
                     selectedId={selectedId}
+                    runtimeContext={runtimeContext}
                 />
             ))}
         </div>
@@ -56,13 +57,15 @@ const DynamicComponent = ({
     stateData,
     onEvent,
     onSelect,
-    selectedId
+    selectedId,
+    runtimeContext
 }: {
     component: ComponentSchema,
     stateData: Record<string, any>,
     onEvent: (flowId?: string) => void,
     onSelect?: (id: string) => void,
-    selectedId?: string
+    selectedId?: string,
+    runtimeContext?: RuntimeContext
 }) => {
     // Interpolate Props
     const interpolatedProps = React.useMemo(() => {
@@ -75,6 +78,18 @@ const DynamicComponent = ({
         if (onSelect) {
             e.stopPropagation(); // Prevent bubbling to container
             onSelect(component.id);
+        } else {
+            if (component.props.customJs) {
+                try {
+                    // eslint-disable-next-line no-new-func
+                    const fn = new Function('state', 'dispatch', 'navigate', component.props.customJs);
+                    fn(stateData, runtimeContext?.dispatch, runtimeContext?.navigate);
+                } catch (e) {
+                    console.error("Custom JS Error:", e);
+                }
+            } else if (component.onEvent?.click) {
+                onEvent(component.onEvent.click);
+            }
         }
     };
 
@@ -105,10 +120,9 @@ const DynamicComponent = ({
                 active:scale-95 border-none
               "
                         onClick={(e) => {
-                            if (onSelect) {
+                            if (!onSelect) {
+                                e.stopPropagation();
                                 handleClick(e);
-                            } else {
-                                onEvent(component.onEvent?.click);
                             }
                         }}
                     >
@@ -168,6 +182,7 @@ const DynamicComponent = ({
                                 onEvent={onEvent}
                                 onSelect={onSelect}
                                 selectedId={selectedId}
+                                runtimeContext={runtimeContext}
                             />
                         ))}
                     </div>
@@ -190,6 +205,7 @@ const DynamicComponent = ({
                                 onEvent={onEvent}
                                 onSelect={onSelect}
                                 selectedId={selectedId}
+                                runtimeContext={runtimeContext}
                             />
                         ))}
                     </div>
@@ -264,7 +280,10 @@ const DynamicComponent = ({
     };
 
     return (
-        <div className={wrapperClass} onClick={handleClick}>
+        <div className={wrapperClass} onClick={handleClick} data-comp-id={component.id}>
+            {component.props.customCss && (
+                <style dangerouslySetInnerHTML={{ __html: component.props.customCss.replace(/\.?selector/g, `[data-comp-id="${component.id}"]`) }} />
+            )}
             {renderContent()}
         </div>
     );

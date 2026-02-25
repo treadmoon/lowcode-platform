@@ -20,7 +20,8 @@ import {
     Package,
     Search,
     ChevronRight,
-    MousePointer2
+    MousePointer2,
+    Database
 } from 'lucide-react';
 import { AppSchema, ComponentSchema } from '../../packages/schema/types';
 import { MockDB } from '../../packages/mock-db';
@@ -33,6 +34,8 @@ import { StudioCanvas } from '../../packages/studio-core/StudioCanvas';
 import { PropertyInspector } from '../../packages/studio-core/PropertyInspector';
 import { StudioRenderer } from '../../packages/studio-core/StudioRenderer';
 import { StudioHeader } from '../../packages/studio-core/StudioHeader';
+import { AICopilotPanel } from '../../packages/studio-core/AICopilotPanel';
+import { StudioDataPanel } from '../../packages/studio-core/StudioDataPanel';
 
 // Helper to find container of an item
 const findContainer = (id: string, components: ComponentSchema[]): string | undefined => {
@@ -182,7 +185,7 @@ function StudioContent() {
     // UI State
     const [leftPanelOpen, setLeftPanelOpen] = useState(true);
     const [rightPanelOpen, setRightPanelOpen] = useState(true);
-    const [activeTab, setActiveTab] = useState<'components' | 'schema'>('components');
+    const [activeTab, setActiveTab] = useState<'components' | 'schema' | 'data'>('components');
     const [leftWidth, setLeftWidth] = useState(300);
     const [rightWidth, setRightWidth] = useState(320);
     const [isResizingLeft, setIsResizingLeft] = useState(false);
@@ -392,6 +395,13 @@ function StudioContent() {
                                     {t('ui.components')}
                                 </button>
                                 <button
+                                    onClick={() => setActiveTab('data')}
+                                    className={`flex-1 py-1.5 text-[11px] rounded-md font-bold uppercase tracking-tight transition-all flex items-center justify-center gap-2 ${activeTab === 'data' ? 'text-primary-600 bg-white shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-800 hover:bg-white/50'}`}
+                                >
+                                    <Database size={14} />
+                                    Data
+                                </button>
+                                <button
                                     onClick={() => setActiveTab('schema')}
                                     className={`flex-1 py-1.5 text-[11px] rounded-md font-bold uppercase tracking-tight transition-all flex items-center justify-center gap-2 ${activeTab === 'schema' ? 'text-primary-600 bg-white shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-800 hover:bg-white/50'}`}
                                 >
@@ -418,6 +428,16 @@ function StudioContent() {
                                                 />
                                             </div>
                                             <ComponentPalette />
+                                        </motion.div>
+                                    ) : activeTab === 'data' ? (
+                                        <motion.div
+                                            key="data-mock"
+                                            initial={{ opacity: 0, x: -10 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            exit={{ opacity: 0, x: -10 }}
+                                            className="h-full flex flex-col"
+                                        >
+                                            <StudioDataPanel schema={schema} onUpdateSchema={updateSchema} />
                                         </motion.div>
                                     ) : (
                                         <motion.div
@@ -547,6 +567,7 @@ function StudioContent() {
                         </div>
                     ) : null}
                 </DragOverlay>
+                <AICopilotPanel schema={schema} />
             </div>
         </DndContext>
     );

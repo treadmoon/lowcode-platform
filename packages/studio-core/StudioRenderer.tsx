@@ -219,9 +219,13 @@ const StudioComponent = ({
       style={style}
       {...attributes}
       {...listeners}
+      data-comp-id={component.id}
       onClick={handleClick}
       className={wrapperClass}
     >
+      {component.props.customCss && (
+        <style dangerouslySetInnerHTML={{ __html: component.props.customCss.replace(/\.?selector/g, `[data-comp-id="${component.id}"]`) }} />
+      )}
       {renderInner()}
 
       {isSelected && (
