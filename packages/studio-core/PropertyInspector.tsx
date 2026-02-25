@@ -30,6 +30,221 @@ import {
 } from 'lucide-react';
 import { useTranslation } from '../i18n';
 
+const Section = ({ title, icon: Icon, children }: { title: string, icon: any, children: React.ReactNode }) => (
+    <div className="space-y-4 mb-6">
+        <div className="flex items-center gap-2 mb-3">
+            <Icon size={14} className="text-primary-500" />
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">{title}</h4>
+            <div className="flex-1 h-[1px] bg-slate-100 ml-2" />
+        </div>
+        {children}
+    </div>
+);
+
+const Label = ({ children }: { children: React.ReactNode }) => (
+    <label className="text-[11px] text-slate-500 font-medium mb-1.5 block tracking-tight">{children}</label>
+);
+
+const Input = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <input
+        {...props}
+        size={1}
+        className="w-full bg-white border border-slate-200 rounded-md text-xs font-normal text-slate-900 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none transition-all placeholder:text-slate-400 px-3 py-1.5 hover:border-slate-300 shadow-sm"
+    />
+);
+
+const Select = (props: React.SelectHTMLAttributes<HTMLSelectElement>) => (
+    <div className="relative">
+        <select
+            {...props}
+            className="w-full bg-white border border-slate-200 rounded-md text-xs font-normal text-slate-900 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer px-3 py-1.5 hover:border-slate-300 shadow-sm"
+        />
+        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+    </div>
+);
+
+const ColorPickerField = ({ label, value, onChange }: { label: string, value?: string, onChange: (val: string) => void }) => {
+    const [show, setShow] = React.useState(false);
+    return (
+        <div className="relative space-y-1">
+            <Label>{label}</Label>
+            <div className="flex items-center gap-2">
+                <div
+                    className="w-8 h-8 rounded border border-slate-200 cursor-pointer shadow-sm relative overflow-hidden bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxyZWN0IHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNMCAwSDhWOFMwIDV6IiBmaWxsPSIjZWVlIi8+PHBhdGggZD0iTTggOEgwVjBTOFCA1eiIgZmlsbD0iI2VlZSIvPjwvc3ZnPg==')]"
+                    onClick={() => setShow(!show)}
+                >
+                    <div className="absolute inset-0" style={{ backgroundColor: value }} />
+                </div>
+                <Input
+                    value={value || ''}
+                    onChange={e => onChange(e.target.value)}
+                    placeholder="#FFFFFF"
+                />
+            </div>
+            {show && (
+                <div className="absolute left-0 top-full z-50 mt-2">
+                    <div className="fixed inset-0" onClick={() => setShow(false)} />
+                    <div className="relative shadow-xl rounded-lg overflow-hidden border border-slate-200">
+                        <SketchPicker
+                            color={value || '#fff'}
+                            onChange={c => onChange(c.hex)}
+                            disableAlpha
+                        />
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const CodeEditorField = ({ label, value, language, onChange, height = "200px", withAI = false }: { label: string, value: string, language: string, onChange: (val: string) => void, height?: string, withAI?: boolean }) => {
+    const { t } = useTranslation();
+    const [isPrompting, setIsPrompting] = React.useState(false);
+    const [prompt, setPrompt] = React.useState('');
+    const [isGenerating, setIsGenerating] = React.useState(false);
+
+    const handleAIGenerate = async () => {
+        if (!prompt.trim() || isGenerating) return;
+        setIsGenerating(true);
+        try {
+            let sysPrompt = `Generate ONLY valid ${language} code based on the user's request, with NO markdown formatting, NO explanation, NO code blocks. The code will be injected right into a ${language} editor.`;
+            if (language === 'css') {
+                sysPrompt += ` IMPORTANT: Use the exact string "selector" as your main CSS class/selector name. For example: selector { ... } selector:hover { ... }`;
+            }
+            if (language === 'javascript') {
+                sysPrompt += ` IMPORTANT: You have access to three arguments in your scope: 'state' (current global JSON state), 'dispatch' (function to update state: dispatch({ type: 'UpdateState', path: 'string', value: any })), and 'navigate' (function(path: string)). DO NOT declare wrapper functions or import statements. Just write the raw JS body that runs when triggered. For example: dispatch({ type: 'UpdateState', path: 'count', value: (state.count || 0) + 1 });`;
+            }
+            const finalPrompt = `System: ${sysPrompt}\n\nUser Request: ${prompt}`;
+
+            const response = await fetch('/api/ai/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: finalPrompt }),
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                let code = data.result || '';
+                if (code.startsWith('\`\`\`')) {
+                    const lines = code.split('\\n');
+                    lines.shift();
+                    if (lines[lines.length - 1].startsWith('\`\`\`')) lines.pop();
+                    code = lines.join('\\n');
+                }
+                onChange(code);
+                setIsPrompting(false);
+                setPrompt('');
+            }
+        } catch (error) {
+            console.error("AI Generation Error", error);
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    return (
+        <div className="space-y-2">
+            <div className="flex items-center justify-between">
+                <Label>{label}</Label>
+                {withAI && (
+                    <button
+                        onClick={() => setIsPrompting(!isPrompting)}
+                        className={`flex items-center gap-1.5 text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-md transition-all ${isPrompting ? 'bg-primary-100 text-primary-600' : 'text-slate-400 hover:text-primary-600 hover:bg-primary-50'}`}
+                    >
+                        <Sparkles size={12} />
+                        AI
+                    </button>
+                )}
+            </div>
+
+            {isPrompting && (
+                <div className="flex gap-2 p-2 bg-gradient-to-r from-primary-50 to-indigo-50 border border-primary-100 rounded-md animate-in fade-in slide-in-from-top-2">
+                    <input
+                        value={prompt}
+                        onChange={e => setPrompt(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleAIGenerate()}
+                        placeholder={language === 'css' ? t('inspector.aiCssPlaceholder') : t('inspector.aiJsPlaceholder')}
+                        className="flex-1 text-[11px] px-2 py-1.5 bg-white border border-primary-100 rounded focus:outline-none focus:ring-1 focus:ring-primary-500/50"
+                    />
+                    <button
+                        onClick={handleAIGenerate}
+                        disabled={isGenerating || !prompt.trim()}
+                        className="shrink-0 px-2 flex items-center justify-center bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50 transition-colors"
+                    >
+                        {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                    </button>
+                </div>
+            )}
+
+            <div className="border border-slate-200 rounded-md overflow-hidden bg-white shadow-sm relative group">
+                {isGenerating && (
+                    <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-10 flex items-center justify-center">
+                        <div className="flex bg-white shadow-lg border border-slate-100 px-3 py-1.5 rounded-full items-center gap-2 text-primary-600 text-[10px] font-bold uppercase tracking-widest">
+                            <Sparkles size={12} className="animate-pulse" />
+                            {t('inspector.generatingCode')}
+                        </div>
+                    </div>
+                )}
+                <Editor
+                    height={height}
+                    defaultLanguage={language}
+                    language={language}
+                    value={value}
+                    onChange={(val) => onChange(val || '')}
+                    options={{
+                        minimap: { enabled: false },
+                        fontSize: 11,
+                        lineNumbers: 'off',
+                        folding: false,
+                        scrollBeyondLastLine: false,
+                        automaticLayout: true,
+                        tabSize: 2,
+                        wordWrap: 'on'
+                    }}
+                />
+            </div>
+        </div>
+    );
+};
+
+const JsonWrapper = ({ value, onChange }: { value: any, onChange: (val: any) => void }) => {
+    const { t } = useTranslation();
+    const [text, setText] = React.useState(JSON.stringify(value || {}, null, 2));
+
+    // Sync when external value changes
+    React.useEffect(() => {
+        // Only update if parsed value is different to avoid cursor jumps, 
+        // but here we just do simple check or assume user edit handles it.
+        // For strict sync, we might need comparison.
+        // Simplest: update text if it doesn't parse to the current value.
+        try {
+            const current = JSON.parse(text);
+            if (JSON.stringify(current) !== JSON.stringify(value)) {
+                setText(JSON.stringify(value || {}, null, 2));
+            }
+        } catch {
+            if (!value) setText("{}");
+        }
+    }, [value]);
+
+    const handleChange = (val: string) => {
+        setText(val);
+        try {
+            const parsed = JSON.parse(val);
+            onChange(parsed);
+        } catch { }
+    };
+
+    return (
+        <CodeEditorField
+            label={t('inspector.customStyle')}
+            value={text}
+            language="json"
+            onChange={handleChange}
+        />
+    );
+};
+
 export const PropertyInspector = ({
     component,
     onUpdate,
@@ -44,219 +259,6 @@ export const PropertyInspector = ({
 
     const handleChange = (key: string, value: any) => {
         onUpdate({ [key]: value });
-    };
-
-    const Section = ({ title, icon: Icon, children }: { title: string, icon: any, children: React.ReactNode }) => (
-        <div className="space-y-4 mb-6">
-            <div className="flex items-center gap-2 mb-3">
-                <Icon size={14} className="text-primary-500" />
-                <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">{title}</h4>
-                <div className="flex-1 h-[1px] bg-slate-100 ml-2" />
-            </div>
-            {children}
-        </div>
-    );
-
-    const Label = ({ children }: { children: React.ReactNode }) => (
-        <label className="text-[11px] text-slate-500 font-medium mb-1.5 block tracking-tight">{children}</label>
-    );
-
-    const Input = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
-        <input
-            {...props}
-            size={1}
-            className="w-full bg-white border border-slate-200 rounded-md text-xs font-normal text-slate-900 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none transition-all placeholder:text-slate-400 px-3 py-1.5 hover:border-slate-300 shadow-sm"
-        />
-    );
-
-    const Select = (props: React.SelectHTMLAttributes<HTMLSelectElement>) => (
-        <div className="relative">
-            <select
-                {...props}
-                className="w-full bg-white border border-slate-200 rounded-md text-xs font-normal text-slate-900 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer px-3 py-1.5 hover:border-slate-300 shadow-sm"
-            />
-            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-        </div>
-    );
-
-    const ColorPickerField = ({ label, value, onChange }: { label: string, value?: string, onChange: (val: string) => void }) => {
-        const [show, setShow] = React.useState(false);
-        return (
-            <div className="relative space-y-1">
-                <Label>{label}</Label>
-                <div className="flex items-center gap-2">
-                    <div
-                        className="w-8 h-8 rounded border border-slate-200 cursor-pointer shadow-sm relative overflow-hidden bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxyZWN0IHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNMCAwSDhWOFMwIDV6IiBmaWxsPSIjZWVlIi8+PHBhdGggZD0iTTggOEgwVjBTOFCA1eiIgZmlsbD0iI2VlZSIvPjwvc3ZnPg==')]"
-                        onClick={() => setShow(!show)}
-                    >
-                        <div className="absolute inset-0" style={{ backgroundColor: value }} />
-                    </div>
-                    <Input
-                        value={value || ''}
-                        onChange={e => onChange(e.target.value)}
-                        placeholder="#FFFFFF"
-                    />
-                </div>
-                {show && (
-                    <div className="absolute left-0 top-full z-50 mt-2">
-                        <div className="fixed inset-0" onClick={() => setShow(false)} />
-                        <div className="relative shadow-xl rounded-lg overflow-hidden border border-slate-200">
-                            <SketchPicker
-                                color={value || '#fff'}
-                                onChange={c => onChange(c.hex)}
-                                disableAlpha
-                            />
-                        </div>
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    const CodeEditorField = ({ label, value, language, onChange, height = "200px", withAI = false }: { label: string, value: string, language: string, onChange: (val: string) => void, height?: string, withAI?: boolean }) => {
-        const [isPrompting, setIsPrompting] = React.useState(false);
-        const [prompt, setPrompt] = React.useState('');
-        const [isGenerating, setIsGenerating] = React.useState(false);
-
-        const handleAIGenerate = async () => {
-            if (!prompt.trim() || isGenerating) return;
-            setIsGenerating(true);
-            try {
-                let sysPrompt = `Generate ONLY valid ${language} code based on the user's request, with NO markdown formatting, NO explanation, NO code blocks. The code will be injected right into a ${language} editor.`;
-                if (language === 'css') {
-                    sysPrompt += ` IMPORTANT: Use the exact string "selector" as your main CSS class/selector name. For example: selector { ... } selector:hover { ... }`;
-                }
-                if (language === 'javascript') {
-                    sysPrompt += ` IMPORTANT: You have access to three arguments in your scope: 'state' (current global JSON state), 'dispatch' (function to update state: dispatch({ type: 'UpdateState', path: 'string', value: any })), and 'navigate' (function(path: string)). DO NOT declare wrapper functions or import statements. Just write the raw JS body that runs when triggered. For example: dispatch({ type: 'UpdateState', path: 'count', value: (state.count || 0) + 1 });`;
-                }
-                const finalPrompt = `System: ${sysPrompt}\n\nUser Request: ${prompt}`;
-
-                const response = await fetch('/api/ai/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt: finalPrompt }),
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    let code = data.result || '';
-                    if (code.startsWith('\`\`\`')) {
-                        const lines = code.split('\\n');
-                        lines.shift();
-                        if (lines[lines.length - 1].startsWith('\`\`\`')) lines.pop();
-                        code = lines.join('\\n');
-                    }
-                    onChange(code);
-                    setIsPrompting(false);
-                    setPrompt('');
-                }
-            } catch (error) {
-                console.error("AI Generation Error", error);
-            } finally {
-                setIsGenerating(false);
-            }
-        };
-
-        return (
-            <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                    <Label>{label}</Label>
-                    {withAI && (
-                        <button
-                            onClick={() => setIsPrompting(!isPrompting)}
-                            className={`flex items - center gap - 1.5 text - [10px] uppercase font - bold tracking - widest px - 2 py - 0.5 rounded - md transition - all ${isPrompting ? 'bg-primary-100 text-primary-600' : 'text-slate-400 hover:text-primary-600 hover:bg-primary-50'} `}
-                        >
-                            <Sparkles size={12} />
-                            AI
-                        </button>
-                    )}
-                </div>
-
-                {isPrompting && (
-                    <div className="flex gap-2 p-2 bg-gradient-to-r from-primary-50 to-indigo-50 border border-primary-100 rounded-md animate-in fade-in slide-in-from-top-2">
-                        <input
-                            value={prompt}
-                            onChange={e => setPrompt(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && handleAIGenerate()}
-                            placeholder={language === 'css' ? '例如：磨砂半透明玻璃效果...' : '例如：获取当前时间并执行 alert...'}
-                            className="flex-1 text-[11px] px-2 py-1.5 bg-white border border-primary-100 rounded focus:outline-none focus:ring-1 focus:ring-primary-500/50"
-                        />
-                        <button
-                            onClick={handleAIGenerate}
-                            disabled={isGenerating || !prompt.trim()}
-                            className="shrink-0 px-2 flex items-center justify-center bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50 transition-colors"
-                        >
-                            {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                        </button>
-                    </div>
-                )}
-
-                <div className="border border-slate-200 rounded-md overflow-hidden bg-white shadow-sm relative group">
-                    {isGenerating && (
-                        <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-10 flex items-center justify-center">
-                            <div className="flex bg-white shadow-lg border border-slate-100 px-3 py-1.5 rounded-full items-center gap-2 text-primary-600 text-[10px] font-bold uppercase tracking-widest">
-                                <Sparkles size={12} className="animate-pulse" />
-                                正在生成代码...
-                            </div>
-                        </div>
-                    )}
-                    <Editor
-                        height={height}
-                        defaultLanguage={language}
-                        language={language}
-                        value={value}
-                        onChange={(val) => onChange(val || '')}
-                        options={{
-                            minimap: { enabled: false },
-                            fontSize: 11,
-                            lineNumbers: 'off',
-                            folding: false,
-                            scrollBeyondLastLine: false,
-                            automaticLayout: true,
-                            tabSize: 2,
-                            wordWrap: 'on'
-                        }}
-                    />
-                </div>
-            </div>
-        );
-    };
-
-    const JsonWrapper = ({ value, onChange }: { value: any, onChange: (val: any) => void }) => {
-        const [text, setText] = React.useState(JSON.stringify(value || {}, null, 2));
-
-        // Sync when external value changes
-        React.useEffect(() => {
-            // Only update if parsed value is different to avoid cursor jumps, 
-            // but here we just do simple check or assume user edit handles it.
-            // For strict sync, we might need comparison.
-            // Simplest: update text if it doesn't parse to the current value.
-            try {
-                const current = JSON.parse(text);
-                if (JSON.stringify(current) !== JSON.stringify(value)) {
-                    setText(JSON.stringify(value || {}, null, 2));
-                }
-            } catch {
-                if (!value) setText("{}");
-            }
-        }, [value]);
-
-        const handleChange = (val: string) => {
-            setText(val);
-            try {
-                const parsed = JSON.parse(val);
-                onChange(parsed);
-            } catch { }
-        };
-
-        return (
-            <CodeEditorField
-                label={t('inspector.customStyle')}
-                value={text}
-                language="json"
-                onChange={handleChange}
-            />
-        );
     };
 
     return (

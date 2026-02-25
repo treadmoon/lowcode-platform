@@ -12,9 +12,9 @@ export const StudioCanvas = ({ children }: { children: React.ReactNode }) => {
         <div
             ref={setNodeRef}
             className={`
-        w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden border 
-        h-[600px] flex flex-col relative transition-all
-        ${isOver ? 'ring-4 ring-neon-indigo border-neon-indigo/50' : 'border-gray-800'}
+        w-full max-w-6xl bg-white rounded-xl shadow-2xl overflow-hidden border 
+        h-full min-h-[80vh] flex flex-col relative transition-all
+        ${isOver ? 'ring-4 ring-primary-500 border-primary-500/50' : 'border-slate-200'}
       `}
         >
             {/* Mock Browser Header */}

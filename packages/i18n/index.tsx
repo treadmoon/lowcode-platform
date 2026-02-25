@@ -65,6 +65,9 @@ const translations = {
             placeholder: "Placeholder",
             msg_delete: "Delete Component",
             msg_empty: "Use ${state.path} to bind properties to the application state.",
+            aiCssPlaceholder: "e.g. frosted glass, neumorphism...",
+            aiJsPlaceholder: "e.g. fetch data, click alert...",
+            generatingCode: "GENERATING CODE...",
             options: {
                 row: "Row",
                 column: "Col",
@@ -90,7 +93,31 @@ const translations = {
             emptySelectionDesc: "Pick a component from the workspace to view and edit its properties",
             emptyContainer: "Container (Drop Here)",
             emptyCard: "Card Content Area",
-            moving: "Moving Component"
+            moving: "Moving Component",
+            outline: "Outline",
+            data: "Data",
+            rootPage: "Root Page"
+        },
+        pageInspector: {
+            title: "Page Settings",
+            rootElement: "Root Element",
+            aiAssistant: "AI Layout Assistant",
+            generateLayout: "Generate Layout",
+            generating: "Generating...",
+            promptPlaceholder: "e.g. Generate a login form...",
+            appearance: "Appearance",
+            backgroundColor: "Background",
+            padding: "Padding",
+            dangerZone: "Danger Zone",
+            clearElements: "Clear All Elements",
+            clearConfirm: "Are you sure you want to clear all elements from this page? This action cannot be undone."
+        },
+        aiCopilot: {
+            title: "AI Assistant (Volcengine)",
+            defaultGreeting: "You can ask me to analyze the page structure or suggest improvements!",
+            layoutApplied: "I have generated and applied the corresponding component layout for you!",
+            networkError: "Sorry, an error occurred while connecting to Volcengine.",
+            inputPlaceholder: "Type a message..."
         }
     },
     zh: {
@@ -153,6 +180,9 @@ const translations = {
             placeholder: "占位提示",
             msg_delete: "删除组件",
             msg_empty: "使用 ${state.path} 将属性绑定到应用状态。",
+            aiCssPlaceholder: "例如：磨砂半透明玻璃效果...",
+            aiJsPlaceholder: "例如：获取当前时间并执行 alert...",
+            generatingCode: "正在生成代码...",
             options: {
                 row: "水平",
                 column: "垂直",
@@ -178,7 +208,31 @@ const translations = {
             emptySelectionDesc: "在画布中选择一个组件以查看和编辑属性",
             emptyContainer: "容器 (拖入组件)",
             emptyCard: "卡片内容区域",
-            moving: "正在移动组件"
+            moving: "正在移动组件",
+            outline: "大纲",
+            data: "数据",
+            rootPage: "根页面"
+        },
+        pageInspector: {
+            title: "页面设置",
+            rootElement: "全局属性",
+            aiAssistant: "AI 智能布局助手",
+            generateLayout: "生成布局",
+            generating: "生成中...",
+            promptPlaceholder: "例如：生成一个包含邮箱和密码输入框的登录表单",
+            appearance: "外观样式",
+            backgroundColor: "背景颜色",
+            padding: "内边距",
+            dangerZone: "危险区域",
+            clearElements: "清空所有元素",
+            clearConfirm: "您确定要清空此页面的所有元素吗？此操作无法撤销。"
+        },
+        aiCopilot: {
+            title: "AI 助手 (火山引擎)",
+            defaultGreeting: "你可以让我分析页面结构，或提出改进建议！",
+            layoutApplied: "我已经为您生成并应用了相应的组件布局！",
+            networkError: "抱歉，连接火山引擎时发生错误。",
+            inputPlaceholder: "输入消息..."
         }
     }
 };

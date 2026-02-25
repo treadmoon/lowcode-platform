@@ -3,9 +3,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, X, Send, Bot, User } from 'lucide-react';
-import { AppSchema } from '../schema/types';
+import { AppSchema, ComponentSchema } from '../schema/types';
+import { useTranslation } from '../i18n';
 
-export const AICopilotPanel = ({ schema }: { schema?: AppSchema }) => {
+export const AICopilotPanel = ({ schema, onUpdatePage }: { schema?: AppSchema, onUpdatePage?: (components: ComponentSchema[]) => void }) => {
+    const { t } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<{ role: 'user' | 'ai', content: string }[]>([]);
     const [input, setInput] = useState('');
@@ -21,8 +23,22 @@ export const AICopilotPanel = ({ schema }: { schema?: AppSchema }) => {
 
         try {
             // Provide schema context to AI
+            const sysInstruction = `You are an AI assistant in a low-code platform. You can answer normal questions in Chinese. 
+IMPORTANT: IF the user asks you to generate a layout, build a form, add components, or create a page, you MUST reply ONLY with a valid JSON array of ComponentSchema objects representing the root layout, and NO other text before or after, NO markdown blocks.
+
+interface ComponentSchema {
+  id: string; // must be unique
+  type: "Text" | "Button" | "Input" | "Container" | "Image" | "Card" | "Divider" | "Checkbox" | "Switch";
+  props: Record<string, any>; // MUST include 'className' for utility classes (Tailwind). Do NOT use 'style' unless necessary. Use padding, flex, bg-colors, rounded corners, shadows.
+  children?: ComponentSchema[]; // only for Container or Card
+}
+
+RULES for layouts:
+1. Design modern, beautiful, highly-polished layouts. Use plenty of whitespace, subtle shadows, rounded borders, and professional color palettes (slate, indigo, primary).
+2. For multi-column layouts, use Container with "flex flex-row gap-4". 
+3. Wrap main content in a parent Container to manage spacing (e.g. "p-6 flex flex-col gap-6 bg-slate-50 min-h-screen").`;
             const contextMsg = schema ? `当前页面组件:\n${JSON.stringify(schema.pages[0]?.components, null, 2)}` : '没有页面结构上下文。';
-            const prompt = `用户请求: ${userMsg}\n\n当前页面上下文:\n${contextMsg}`;
+            const prompt = `System: ${sysInstruction}\n\n当前页面上下文:\n${contextMsg}\n\n用户请求: ${userMsg}`;
 
             const response = await fetch('/api/ai/chat', {
                 method: 'POST',
@@ -33,9 +49,27 @@ export const AICopilotPanel = ({ schema }: { schema?: AppSchema }) => {
             if (!response.ok) throw new Error("Network error");
             const data = await response.json();
 
+            let outputStr = data.result || '';
+            const firstBracket = outputStr.indexOf('[');
+            const lastBracket = outputStr.lastIndexOf(']');
+
+            if (firstBracket !== -1 && lastBracket !== -1 && lastBracket >= firstBracket) {
+                try {
+                    const jsonStr = outputStr.substring(firstBracket, lastBracket + 1);
+                    const parsedComponents = JSON.parse(jsonStr);
+                    if (Array.isArray(parsedComponents) && onUpdatePage) {
+                        onUpdatePage(parsedComponents);
+                        setMessages(prev => [...prev, { role: 'ai', content: t('aiCopilot.layoutApplied') }]);
+                        return;
+                    }
+                } catch (err) {
+                    // Not valid json array, just show as text
+                }
+            }
+
             setMessages(prev => [...prev, { role: 'ai', content: data.result }]);
         } catch (error) {
-            setMessages(prev => [...prev, { role: 'ai', content: "抱歉，连接火山引擎时发生错误。" }]);
+            setMessages(prev => [...prev, { role: 'ai', content: t('aiCopilot.networkError') }]);
         } finally {
             setIsLoading(false);
         }
@@ -54,7 +88,7 @@ export const AICopilotPanel = ({ schema }: { schema?: AppSchema }) => {
                         <div className="bg-gradient-to-r from-primary-600 to-indigo-600 p-3 flex items-center justify-between text-white">
                             <div className="flex items-center gap-2 font-semibold text-sm">
                                 <Sparkles size={16} />
-                                AI 助手 (火山引擎)
+                                {t('aiCopilot.title')}
                             </div>
                             <button onClick={() => setIsOpen(false)} className="hover:bg-white/20 p-1 rounded-md transition-colors">
                                 <X size={16} />
@@ -64,7 +98,7 @@ export const AICopilotPanel = ({ schema }: { schema?: AppSchema }) => {
                         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 custom-scrollbar bg-slate-50">
                             {messages.length === 0 && (
                                 <div className="text-center text-slate-400 text-xs mt-10">
-                                    你可以让我分析页面结构，或提出改进建议！
+                                    {t('aiCopilot.defaultGreeting')}
                                 </div>
                             )}
                             {messages.map((m, i) => (
@@ -96,7 +130,7 @@ export const AICopilotPanel = ({ schema }: { schema?: AppSchema }) => {
                                 value={input}
                                 onChange={e => setInput(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && handleSend()}
-                                placeholder="输入消息..."
+                                placeholder={t('aiCopilot.inputPlaceholder')}
                                 className="flex-1 text-xs px-3 py-2 bg-slate-100 rounded-lg outline-none focus:ring-2 focus:ring-primary-500/50"
                             />
                             <button

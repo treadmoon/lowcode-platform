@@ -52,7 +52,13 @@ function RuntimeContent() {
                 </div>
 
                 {/* Page Content */}
-                <div className="w-full max-w-4xl bg-white/80 backdrop-blur-sm rounded-3xl p-8 min-h-[600px] relative overflow-hidden border border-white shadow-xl">
+                <div
+                    className="w-full max-w-4xl backdrop-blur-sm rounded-3xl min-h-[600px] relative overflow-hidden border border-white shadow-xl"
+                    style={{
+                        backgroundColor: homePage.props?.backgroundColor || 'rgba(255, 255, 255, 0.8)',
+                        padding: homePage.props?.padding || '2rem'
+                    }}
+                >
                     <PageRenderer schema={homePage} />
                 </div>
             </div>

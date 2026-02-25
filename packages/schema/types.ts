@@ -53,6 +53,7 @@ export interface ComponentSchema {
 export interface PageSchema {
   id: string;
   path: string;
+  props?: Record<string, any>;
   components: ComponentSchema[];
   actions: ActionFlow[]; // Local definition of flows
 }

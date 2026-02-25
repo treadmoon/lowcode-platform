@@ -21,9 +21,10 @@ import {
     Search,
     ChevronRight,
     MousePointer2,
-    Database
+    Database,
+    Layers
 } from 'lucide-react';
-import { AppSchema, ComponentSchema } from '../../packages/schema/types';
+import { AppSchema, ComponentSchema, PageSchema } from '../../packages/schema/types';
 import { MockDB } from '../../packages/mock-db';
 import { StoreProvider } from '../../packages/state-core/store';
 import { LanguageProvider, useTranslation } from '../../packages/i18n';
@@ -36,6 +37,8 @@ import { StudioRenderer } from '../../packages/studio-core/StudioRenderer';
 import { StudioHeader } from '../../packages/studio-core/StudioHeader';
 import { AICopilotPanel } from '../../packages/studio-core/AICopilotPanel';
 import { StudioDataPanel } from '../../packages/studio-core/StudioDataPanel';
+import { PageInspector } from '../../packages/studio-core/PageInspector';
+import { SchemaOutline } from '../../packages/studio-core/SchemaOutline';
 
 // Helper to find container of an item
 const findContainer = (id: string, components: ComponentSchema[]): string | undefined => {
@@ -185,7 +188,7 @@ function StudioContent() {
     // UI State
     const [leftPanelOpen, setLeftPanelOpen] = useState(true);
     const [rightPanelOpen, setRightPanelOpen] = useState(true);
-    const [activeTab, setActiveTab] = useState<'components' | 'schema' | 'data'>('components');
+    const [activeTab, setActiveTab] = useState<'components' | 'schema' | 'data' | 'outline'>('components');
     const [leftWidth, setLeftWidth] = useState(300);
     const [rightWidth, setRightWidth] = useState(320);
     const [isResizingLeft, setIsResizingLeft] = useState(false);
@@ -250,6 +253,19 @@ function StudioContent() {
         const newPages = [...schema.pages];
         newPages[0].components = updateComponentProps(newPages[0].components, selectedComponentId, newProps);
         updateSchema({ ...schema, pages: newPages });
+    };
+
+    const handleUpdatePage = (updates: Partial<PageSchema>) => {
+        if (!schema) return;
+        const newPages = [...schema.pages];
+        newPages[0] = { ...newPages[0], ...updates };
+        updateSchema({ ...schema, pages: newPages });
+    };
+
+    const handleClearElements = () => {
+        if (!schema) return;
+        handleUpdatePage({ components: [] });
+        setSelectedComponentId(null);
     };
 
     const handleJsonChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -386,27 +402,34 @@ function StudioContent() {
                         style={{ width: leftWidth }}
                     >
                         <div className="h-full flex flex-col" style={{ width: leftWidth }}>
-                            <div className="flex border-b border-slate-100 p-2 gap-2 bg-slate-50/50">
+                            <div className="flex flex-wrap border-b border-slate-100 p-2 gap-1.5 bg-slate-50/50">
                                 <button
                                     onClick={() => setActiveTab('components')}
-                                    className={`flex-1 py-1.5 text-[11px] rounded-md font-bold uppercase tracking-tight transition-all flex items-center justify-center gap-2 ${activeTab === 'components' ? 'text-primary-600 bg-white shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-800 hover:bg-white/50'}`}
+                                    className={`flex-1 min-w-[70px] px-2 py-1.5 text-[11px] rounded-md font-bold uppercase tracking-tight transition-all flex items-center justify-center gap-1.5 ${activeTab === 'components' ? 'text-primary-600 bg-white shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}
                                 >
-                                    <Package size={14} />
-                                    {t('ui.components')}
+                                    <Package size={13} className="shrink-0" />
+                                    <span className="truncate">{t('ui.components')}</span>
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('outline')}
+                                    className={`flex-1 min-w-[70px] px-2 py-1.5 text-[11px] rounded-md font-bold uppercase tracking-tight transition-all flex items-center justify-center gap-1.5 ${activeTab === 'outline' ? 'text-primary-600 bg-white shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}
+                                >
+                                    <Layers size={13} className="shrink-0" />
+                                    <span className="truncate">{t('ui.outline')}</span>
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('data')}
-                                    className={`flex-1 py-1.5 text-[11px] rounded-md font-bold uppercase tracking-tight transition-all flex items-center justify-center gap-2 ${activeTab === 'data' ? 'text-primary-600 bg-white shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-800 hover:bg-white/50'}`}
+                                    className={`flex-1 min-w-[70px] px-2 py-1.5 text-[11px] rounded-md font-bold uppercase tracking-tight transition-all flex items-center justify-center gap-1.5 ${activeTab === 'data' ? 'text-primary-600 bg-white shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}
                                 >
-                                    <Database size={14} />
-                                    Data
+                                    <Database size={13} className="shrink-0" />
+                                    <span className="truncate">{t('ui.data')}</span>
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('schema')}
-                                    className={`flex-1 py-1.5 text-[11px] rounded-md font-bold uppercase tracking-tight transition-all flex items-center justify-center gap-2 ${activeTab === 'schema' ? 'text-primary-600 bg-white shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-800 hover:bg-white/50'}`}
+                                    className={`flex-1 min-w-[70px] px-2 py-1.5 text-[11px] rounded-md font-bold uppercase tracking-tight transition-all flex items-center justify-center gap-1.5 ${activeTab === 'schema' ? 'text-primary-600 bg-white shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}
                                 >
-                                    <Code size={14} />
-                                    {t('ui.schema')}
+                                    <Code size={13} className="shrink-0" />
+                                    <span className="truncate">{t('ui.schema')}</span>
                                 </button>
                             </div>
 
@@ -438,6 +461,16 @@ function StudioContent() {
                                             className="h-full flex flex-col"
                                         >
                                             <StudioDataPanel schema={schema} onUpdateSchema={updateSchema} />
+                                        </motion.div>
+                                    ) : activeTab === 'outline' ? (
+                                        <motion.div
+                                            key="outline"
+                                            initial={{ opacity: 0, x: -10 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            exit={{ opacity: 0, x: -10 }}
+                                            className="h-full flex flex-col"
+                                        >
+                                            <SchemaOutline schema={schema} selectedId={selectedComponentId} onSelect={setSelectedComponentId} />
                                         </motion.div>
                                     ) : (
                                         <motion.div
@@ -478,7 +511,7 @@ function StudioContent() {
                         {/* Dot Grid Background */}
                         <div className="absolute inset-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:24px_24px] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none" />
 
-                        <div className="flex-1 overflow-auto scroll-smooth custom-scrollbar relative z-10 p-8 flex justify-center">
+                        <div className="flex-1 overflow-auto scroll-smooth custom-scrollbar relative z-10 p-8 flex justify-center" style={{ backgroundColor: activePage?.props?.backgroundColor, padding: activePage?.props?.padding }}>
                             <StoreProvider key={JSON.stringify(schema.initialState)} initialState={schema.initialState}>
                                 <StudioCanvas>
                                     <StudioRenderer
@@ -540,17 +573,13 @@ function StudioContent() {
                                     onUpdate={handlePropUpdate}
                                     onDelete={handleDelete}
                                 />
-                            ) : (
-                                <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-4 p-8 text-center balance">
-                                    <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center border border-slate-100 ring-4 ring-slate-50/50">
-                                        <MousePointer2 size={24} className="text-slate-300 animate-pulse" />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">{t('ui.emptySelectionTitle')}</p>
-                                        <p className="text-[10px] text-slate-400">{t('ui.emptySelectionDesc')}</p>
-                                    </div>
-                                </div>
-                            )}
+                            ) : activePage ? (
+                                <PageInspector
+                                    page={activePage}
+                                    onUpdatePage={handleUpdatePage}
+                                    onClearElements={handleClearElements}
+                                />
+                            ) : null}
                         </div>
                     </motion.aside>
                 </main>
@@ -567,7 +596,7 @@ function StudioContent() {
                         </div>
                     ) : null}
                 </DragOverlay>
-                <AICopilotPanel schema={schema} />
+                <AICopilotPanel schema={schema} onUpdatePage={(components) => handleUpdatePage({ components })} />
             </div>
         </DndContext>
     );
