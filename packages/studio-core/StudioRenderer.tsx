@@ -209,6 +209,38 @@ const StudioComponent = ({
             </div>
           </div>
         );
+      case 'CustomComponent':
+        return (
+          <div
+            className="border-2 border-dashed border-primary-300 bg-primary-50/30 p-4 flex flex-col items-center justify-center gap-2 min-h-[120px] rounded-xl relative overflow-hidden group"
+            style={{ ...interpolatedProps.style, padding: interpolatedProps.padding }}
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 to-indigo-500/5 pointer-events-none" />
+            <div className="text-primary-500 flex items-center gap-2 font-semibold text-xs bg-white px-3 py-1.5 rounded-full shadow-sm border border-primary-100 z-10 transition-transform group-hover:scale-105">
+              <span>✨</span> {interpolatedProps.title || 'AI Custom Component'}
+            </div>
+            {interpolatedProps.description && (
+              <p className="text-[10px] text-slate-500 text-center max-w-[80%] z-10">{interpolatedProps.description}</p>
+            )}
+            <SortableContext
+              id={component.id}
+              items={component.children?.map(c => c.id) || []}
+              strategy={verticalListSortingStrategy}
+            >
+              {component.children?.map(child => (
+                <StudioComponent
+                  key={child.id}
+                  component={child}
+                  stateData={stateData}
+                  onSelect={onSelect}
+                  onDelete={onDelete}
+                  onUpdate={onUpdate}
+                  selectedId={selectedId}
+                />
+              ))}
+            </SortableContext>
+          </div>
+        );
       default: return <div>Unknown</div>;
     }
   };

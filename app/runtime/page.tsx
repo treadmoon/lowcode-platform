@@ -44,7 +44,7 @@ function RuntimeContent() {
                         </button>
                         <a
                             href="/studio"
-                            className="text-xs bg-primary-600 hover:bg-primary-700 text-white px-5 py-1.5 rounded-full transition-all shadow-md shadow-primary-500/20 hover:shadow-primary-500/30 font-medium"
+                            className="text-xs bg-slate-900 hover:bg-slate-800 text-white px-5 py-1.5 rounded-full transition-all shadow-md shadow-slate-900/20 hover:shadow-slate-900/30 font-medium"
                         >
                             ← {t('runtime.back')}
                         </a>

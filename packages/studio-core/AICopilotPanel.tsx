@@ -6,7 +6,7 @@ import { Sparkles, X, Send, Bot, User } from 'lucide-react';
 import { AppSchema, ComponentSchema } from '../schema/types';
 import { useTranslation } from '../i18n';
 
-export const AICopilotPanel = ({ schema, onUpdatePage }: { schema?: AppSchema, onUpdatePage?: (components: ComponentSchema[]) => void }) => {
+export const AICopilotPanel = ({ schema, onUpdatePage, onAddCustomComponent, onUpdateCustomComponent }: { schema?: AppSchema, onUpdatePage?: (components: ComponentSchema[]) => void, onAddCustomComponent?: (component: ComponentSchema, name: string) => void, onUpdateCustomComponent?: (name: string, component: ComponentSchema) => void }) => {
     const { t } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<{ role: 'user' | 'ai', content: string }[]>([]);
@@ -23,20 +23,41 @@ export const AICopilotPanel = ({ schema, onUpdatePage }: { schema?: AppSchema, o
 
         try {
             // Provide schema context to AI
-            const sysInstruction = `You are an AI assistant in a low-code platform. You can answer normal questions in Chinese. 
-IMPORTANT: IF the user asks you to generate a layout, build a form, add components, or create a page, you MUST reply ONLY with a valid JSON array of ComponentSchema objects representing the root layout, and NO other text before or after, NO markdown blocks.
+            const sysInstruction = `You are an AI assistant in a low-code platform. You can answer normal questions in Chinese.
+
+You have THREE ways to generate or modify components based on the user request:
+
+ACTION 1: Generate a page layout.
+If the user asks to generate a layout, build a page, or add components to current page, you MUST reply ONLY with a valid JSON array of ComponentSchema objects representing the root layout: [ { "id": "...", "type": "Container", ... } ]
+
+ACTION 2: Create a NEW reusable component for the library.
+If the user asks to "制作一个组件", "创建一个可复用组件", or "添加到组件库" (e.g. "制作一个轮播图组件", "保存个自定义组件"), you MUST reply ONLY with a single JSON object with this exact structure:
+{
+  "intent": "create_reusable",
+  "name": "组件名称 (e.g. 轮播图)",
+  "component": { "id": "...", "type": "Container", "props": {...}, "children": [...] } // The root ComponentSchema of the reusable component
+}
+
+ACTION 3: Update/Modify an EXISTING reusable component in the library.
+If the user says they are not satisfied and want to update/modify a previously generated library component (e.g. "修改一下轮播图组件", "把刚才的组件加个红色按钮", "更新xxx的样式"), you MUST reply ONLY with this single JSON object:
+{
+  "intent": "update_reusable",
+  "name": "要修改的组件名称 (e.g. 轮播图)",
+  "component": { "id": "...", "type": "Container", "props": {...}, "children": [...] } // The COMPLETE updated ComponentSchema
+}
 
 interface ComponentSchema {
   id: string; // must be unique
-  type: "Text" | "Button" | "Input" | "Container" | "Image" | "Card" | "Divider" | "Checkbox" | "Switch";
+  type: "Text" | "Button" | "Input" | "Container" | "Image" | "Card" | "Divider" | "Checkbox" | "Switch" | "CustomComponent";
   props: Record<string, any>; // MUST include 'className' for utility classes (Tailwind). Do NOT use 'style' unless necessary. Use padding, flex, bg-colors, rounded corners, shadows.
   children?: ComponentSchema[]; // only for Container or Card
 }
 
 RULES for layouts:
-1. Design modern, beautiful, highly-polished layouts. Use plenty of whitespace, subtle shadows, rounded borders, and professional color palettes (slate, indigo, primary).
-2. For multi-column layouts, use Container with "flex flex-row gap-4". 
-3. Wrap main content in a parent Container to manage spacing (e.g. "p-6 flex flex-col gap-6 bg-slate-50 min-h-screen").`;
+1. NO markdown blocks or explanatory text outside JSON.
+2. Design modern, beautiful, highly-polished layouts. Use plenty of whitespace, subtle shadows, rounded borders, and professional color palettes (slate, indigo, primary).
+3. For multi-column layouts, use Container with "flex flex-row gap-4". 
+4. Wrap main content in a parent Container to manage spacing (e.g. "p-6 flex flex-col gap-6 bg-slate-50 min-h-screen").`;
             const contextMsg = schema ? `当前页面组件:\n${JSON.stringify(schema.pages[0]?.components, null, 2)}` : '没有页面结构上下文。';
             const prompt = `System: ${sysInstruction}\n\n当前页面上下文:\n${contextMsg}\n\n用户请求: ${userMsg}`;
 
@@ -52,18 +73,41 @@ RULES for layouts:
             let outputStr = data.result || '';
             const firstBracket = outputStr.indexOf('[');
             const lastBracket = outputStr.lastIndexOf(']');
+            const firstBrace = outputStr.indexOf('{');
+            const lastBrace = outputStr.lastIndexOf('}');
 
-            if (firstBracket !== -1 && lastBracket !== -1 && lastBracket >= firstBracket) {
+            if (firstBracket !== -1 || firstBrace !== -1) {
                 try {
-                    const jsonStr = outputStr.substring(firstBracket, lastBracket + 1);
-                    const parsedComponents = JSON.parse(jsonStr);
-                    if (Array.isArray(parsedComponents) && onUpdatePage) {
-                        onUpdatePage(parsedComponents);
-                        setMessages(prev => [...prev, { role: 'ai', content: t('aiCopilot.layoutApplied') }]);
-                        return;
+                    // Decide if it's an array or object
+                    const isArray = firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace);
+                    if (isArray) {
+                        const jsonStr = outputStr.substring(firstBracket, lastBracket + 1);
+                        const parsedComponents = JSON.parse(jsonStr);
+                        if (Array.isArray(parsedComponents) && onUpdatePage) {
+                            onUpdatePage(parsedComponents);
+                            setMessages(prev => [...prev, { role: 'ai', content: t('aiCopilot.layoutApplied') }]);
+                            return;
+                        }
+                    } else {
+                        const jsonStr = outputStr.substring(firstBrace, lastBrace + 1);
+                        const parsedData = JSON.parse(jsonStr);
+                        if (parsedData?.intent === 'create_reusable' && parsedData.component && onAddCustomComponent) {
+                            onAddCustomComponent(parsedData.component, parsedData.name || 'AI组件');
+                            setMessages(prev => [...prev, { role: 'ai', content: `已成功生成并向组件库添加了组件：【${parsedData.name || 'AI组件'}】。您可以从左侧边栏直接拖拽复用它！` }]);
+                            return;
+                        } else if (parsedData?.intent === 'update_reusable' && parsedData.component && onUpdateCustomComponent) {
+                            onUpdateCustomComponent(parsedData.name || 'AI组件', parsedData.component);
+                            setMessages(prev => [...prev, { role: 'ai', content: `已在组件库中成功更新了组件：【${parsedData.name || 'AI组件'}】。` }]);
+                            return;
+                        } else if (parsedData?.id && onUpdatePage) {
+                            // In case it generated a single component schema instead of array
+                            onUpdatePage([parsedData]);
+                            setMessages(prev => [...prev, { role: 'ai', content: t('aiCopilot.layoutApplied') }]);
+                            return;
+                        }
                     }
                 } catch (err) {
-                    // Not valid json array, just show as text
+                    // Fallback to normal text
                 }
             }
 

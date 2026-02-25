@@ -43,7 +43,7 @@ export interface ActionFlow {
 
 export interface ComponentSchema {
   id: string;
-  type: 'Text' | 'Button' | 'Input' | 'Container' | 'Image' | 'Card' | 'Divider' | 'Checkbox' | 'Switch';
+  type: 'Text' | 'Button' | 'Input' | 'Container' | 'Image' | 'Card' | 'Divider' | 'Checkbox' | 'Switch' | 'CustomComponent';
   props: Record<string, any>;
   bindState?: string; // path in state
   onEvent?: Record<string, string>; // eventName -> flowId
@@ -61,4 +61,5 @@ export interface PageSchema {
 export interface AppSchema {
   pages: PageSchema[];
   initialState: Record<string, any>;
+  customLibrary?: { id: string, name: string, schema: ComponentSchema }[];
 }

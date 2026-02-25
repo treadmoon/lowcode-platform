@@ -176,6 +176,14 @@ const moveItemIntoContainer = (rootComponents: ComponentSchema[], activeId: stri
     return updateContainer(newComponents);
 };
 
+const deepCloneComponent = (comp: ComponentSchema): ComponentSchema => {
+    return {
+        ...comp,
+        id: `comp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        children: comp.children ? comp.children.map(deepCloneComponent) : undefined
+    };
+};
+
 function StudioContent() {
     const { t, language } = useTranslation();
     const [schema, setSchema] = useState<AppSchema | null>(null);
@@ -262,6 +270,31 @@ function StudioContent() {
         updateSchema({ ...schema, pages: newPages });
     };
 
+    const handleAddCustomComponent = (component: ComponentSchema, name: string) => {
+        if (!schema) return;
+        const newLibrary = [...(schema.customLibrary || []), { id: `lib-${Date.now()}`, name, schema: component }];
+        updateSchema({ ...schema, customLibrary: newLibrary });
+    };
+
+    const handleUpdateCustomComponent = (idOrName: string, newComponent: ComponentSchema) => {
+        if (!schema || !schema.customLibrary) return;
+        const index = schema.customLibrary.findIndex(c => c.id === idOrName || c.name === idOrName);
+        if (index === -1) {
+            // Not found, so we just add it instead
+            handleAddCustomComponent(newComponent, idOrName);
+            return;
+        }
+        const newLibrary = [...schema.customLibrary];
+        newLibrary[index] = { ...newLibrary[index], schema: newComponent };
+        updateSchema({ ...schema, customLibrary: newLibrary });
+    };
+
+    const handleDeleteCustomComponent = (id: string) => {
+        if (!schema || !schema.customLibrary) return;
+        const newLibrary = schema.customLibrary.filter(c => c.id !== id);
+        updateSchema({ ...schema, customLibrary: newLibrary });
+    };
+
     const handleClearElements = () => {
         if (!schema) return;
         handleUpdatePage({ components: [] });
@@ -305,8 +338,9 @@ function StudioContent() {
         setActiveDraggable(null);
         if (!over || !schema) return;
 
-        if (active.data.current?.type === 'new-component') {
-            const type = active.data.current.componentType;
+        if (active.data.current?.type === 'new-component' || active.data.current?.type === 'lib-component') {
+            const isLib = active.data.current.type === 'lib-component';
+            const type = isLib ? null : active.data.current.componentType;
             let containerId = 'root-canvas';
             let index = -1;
             const overComp = findComponentById(schema.pages[0].components, over.id as string);
@@ -322,7 +356,7 @@ function StudioContent() {
                 if (cont) containerId = cont;
             }
 
-            const newComponent: ComponentSchema = {
+            const defaultComponent: ComponentSchema = {
                 id: `comp-${Date.now()}`,
                 type: type as any,
                 props: {
@@ -335,9 +369,12 @@ function StudioContent() {
                     ...(type === 'Divider' && { style: { height: '1px', backgroundColor: '#e5e7eb', margin: '1rem 0' } }),
                     ...(type === 'Checkbox' && { label: 'Option Label', checked: false }),
                     ...(type === 'Switch' && { label: 'Toggle Switch', active: false }),
+                    ...(type === 'CustomComponent' && { title: 'AI 组件', description: '这里将会由 AI 生成...', style: { width: '100%', minHeight: '150px' } }),
                 },
                 children: []
             };
+
+            const newComponent = isLib ? deepCloneComponent(active.data.current.schema) : defaultComponent;
 
             const newComponents = insertItem(schema.pages[0].components, containerId, newComponent, index < 0 ? 999 : index);
             const newPages = [...schema.pages];
@@ -450,7 +487,10 @@ function StudioContent() {
                                                     className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 transition-all placeholder:text-slate-400 py-2 pl-9 pr-4"
                                                 />
                                             </div>
-                                            <ComponentPalette />
+                                            <ComponentPalette
+                                                customLibrary={schema.customLibrary || []}
+                                                onDeleteCustomComponent={handleDeleteCustomComponent}
+                                            />
                                         </motion.div>
                                     ) : activeTab === 'data' ? (
                                         <motion.div
@@ -596,7 +636,12 @@ function StudioContent() {
                         </div>
                     ) : null}
                 </DragOverlay>
-                <AICopilotPanel schema={schema} onUpdatePage={(components) => handleUpdatePage({ components })} />
+                <AICopilotPanel
+                    schema={schema}
+                    onUpdatePage={(components) => handleUpdatePage({ components })}
+                    onAddCustomComponent={handleAddCustomComponent}
+                    onUpdateCustomComponent={handleUpdateCustomComponent}
+                />
             </div>
         </DndContext>
     );

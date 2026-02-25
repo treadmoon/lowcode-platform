@@ -43,7 +43,8 @@ const translations = {
             Card: "Card",
             Divider: "Divider",
             Checkbox: "Checkbox",
-            Switch: "Switch"
+            Switch: "Switch",
+            CustomComponent: "AI Component"
         },
         inspector: {
             properties: "Properties",
@@ -158,7 +159,8 @@ const translations = {
             Card: "卡片",
             Divider: "分隔线",
             Checkbox: "复选框",
-            Switch: "开关"
+            Switch: "开关",
+            CustomComponent: "AI 智能组件"
         },
         inspector: {
             properties: "基础属性",

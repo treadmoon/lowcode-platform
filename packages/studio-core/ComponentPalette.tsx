@@ -12,9 +12,12 @@ import {
     CreditCard,
     Minus,
     CheckSquare,
-    ToggleLeft
+    ToggleLeft,
+    Sparkles,
+    Trash2
 } from 'lucide-react';
 import { useTranslation } from '../i18n';
+import { ComponentSchema } from '../schema/types';
 
 const ICON_MAP = {
     Text: Type,
@@ -25,7 +28,8 @@ const ICON_MAP = {
     Card: CreditCard,
     Divider: Minus,
     Checkbox: CheckSquare,
-    Switch: ToggleLeft
+    Switch: ToggleLeft,
+    CustomComponent: Sparkles
 };
 
 export const COMPONENT_TYPES = [
@@ -38,6 +42,7 @@ export const COMPONENT_TYPES = [
     { type: 'Divider', label: 'Divider', icon: 'Divider' },
     { type: 'Checkbox', label: 'Check', icon: 'Checkbox' },
     { type: 'Switch', label: 'Switch', icon: 'Switch' },
+    { type: 'CustomComponent', label: 'AI Component', icon: 'CustomComponent' },
 ];
 
 export const DraggableComponentItem = ({ type, label, iconName }: { type: string, label: string, iconName: string }) => {
@@ -129,7 +134,57 @@ export const DraggableComponentItem = ({ type, label, iconName }: { type: string
     );
 };
 
-export const ComponentPalette = () => {
+export const DraggableLibraryItem = ({ schemaItem, onDelete }: { schemaItem: { id: string, name: string, schema: ComponentSchema }, onDelete?: (id: string) => void }) => {
+    const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+        id: `palette-lib-${schemaItem.id}`,
+        data: {
+            type: 'lib-component',
+            schema: schemaItem.schema
+        }
+    });
+
+    const style = transform ? {
+        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    } : undefined;
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            {...listeners}
+            {...attributes}
+            className={`
+                group flex flex-col items-center justify-center gap-2 aspect-square rounded-xl
+                shadow-sm transition-all duration-200
+                bg-white border border-slate-200 hover:bg-fuchsia-50 hover:border-fuchsia-400
+                cursor-grab active:cursor-grabbing
+                ${isDragging ? 'opacity-40 scale-95' : 'opacity-100 hover:scale-105'}
+            `}
+            title={schemaItem.name}
+        >
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors text-fuchsia-500 bg-fuchsia-50 group-hover:bg-white`}>
+                <Sparkles size={20} strokeWidth={2} />
+            </div>
+            <span className={`text-[11px] font-semibold transition-colors text-slate-600 group-hover:text-fuchsia-600 line-clamp-1 px-2 text-center break-all`}>
+                {schemaItem.name}
+            </span>
+            {onDelete && (
+                <div
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(schemaItem.id);
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-500 opacity-0 group-hover:opacity-100 transition-all shadow-sm z-10 cursor-pointer"
+                >
+                    <Trash2 size={10} />
+                </div>
+            )}
+        </div>
+    );
+};
+
+export const ComponentPalette = ({ customLibrary = [], onDeleteCustomComponent }: { customLibrary?: { id: string, name: string, schema: ComponentSchema }[], onDeleteCustomComponent?: (id: string) => void }) => {
     const { t } = useTranslation();
     return (
         <div className="flex flex-col gap-4 p-2">
@@ -143,6 +198,23 @@ export const ComponentPalette = () => {
                     />
                 ))}
             </div>
+
+            {customLibrary.length > 0 && (
+                <>
+                    <div className="mt-4 mb-2 flex flex-col gap-1">
+                        <div className="text-xs font-bold text-slate-800 uppercase tracking-widest flex items-center gap-1">
+                            <Sparkles size={14} className="text-fuchsia-500" />
+                            AI 自定义库
+                        </div>
+                        <div className="h-[1px] bg-slate-200 w-full" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        {customLibrary.map(item => (
+                            <DraggableLibraryItem key={item.id} schemaItem={item} onDelete={onDeleteCustomComponent} />
+                        ))}
+                    </div>
+                </>
+            )}
         </div>
     );
 };

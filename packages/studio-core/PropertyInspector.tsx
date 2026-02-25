@@ -376,6 +376,27 @@ export const PropertyInspector = ({
                             </div>
                         </div>
                     )}
+
+                    {component.type === 'CustomComponent' && (
+                        <div className="space-y-3">
+                            <div>
+                                <Label>名称 (Title)</Label>
+                                <Input
+                                    value={component.props.title || ''}
+                                    placeholder="例如：AI 数据表格"
+                                    onChange={e => handleChange('title', e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <Label>描述 (Description)</Label>
+                                <Input
+                                    value={component.props.description || ''}
+                                    placeholder="对 AI 描述你想要的详细结构..."
+                                    onChange={e => handleChange('description', e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    )}
                 </Section>
 
                 <Section title={t('inspector.layout')} icon={LayoutTemplate}>
