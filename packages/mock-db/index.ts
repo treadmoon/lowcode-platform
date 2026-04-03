@@ -5,24 +5,36 @@ const STORAGE_KEY = 'lowcode_schema_v1';
 
 export const MockDB = {
     getSchema: async (): Promise<AppSchema> => {
-        // Simulate latency
-        await new Promise(r => setTimeout(r, 100));
+        // Try server first
+        try {
+            const res = await fetch('/api/schema');
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.pages) return data;
+            }
+        } catch {}
 
+        // Fallback to localStorage
         if (typeof window !== 'undefined') {
             const stored = localStorage.getItem(STORAGE_KEY);
             if (stored) {
-                try {
-                    return JSON.parse(stored);
-                } catch (e) {
-                    console.error("Failed to parse stored schema", e);
-                }
+                try { return JSON.parse(stored); } catch {}
             }
         }
         return INITIAL_SCHEMA;
     },
 
     saveSchema: async (schema: AppSchema): Promise<void> => {
-        await new Promise(r => setTimeout(r, 100));
+        // Save to server
+        try {
+            await fetch('/api/schema', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(schema),
+            });
+        } catch {}
+
+        // Also save to localStorage as backup
         if (typeof window !== 'undefined') {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(schema));
         }

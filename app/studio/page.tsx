@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
     DndContext,
     DragEndEvent,
@@ -10,7 +10,9 @@ import {
     PointerSensor,
     useSensor,
     useSensors,
-    closestCorners
+    pointerWithin,
+    rectIntersection,
+    CollisionDetection
 } from '@dnd-kit/core';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -25,9 +27,14 @@ import {
     Layers
 } from 'lucide-react';
 import { AppSchema, ComponentSchema, PageSchema } from '../../packages/schema/types';
+import {
+    findContainer, findComponentById, updateComponentProps,
+    insertItem, removeItem, moveItemInTree, moveItemIntoContainer, deepCloneComponent
+} from '../../packages/schema/tree-utils';
 import { MockDB } from '../../packages/mock-db';
 import { StoreProvider } from '../../packages/state-core/store';
 import { LanguageProvider, useTranslation } from '../../packages/i18n';
+import { useSchemaHistory } from '../../packages/studio-core/useSchemaHistory';
 
 // Studio Core
 import { ComponentPalette } from '../../packages/studio-core/ComponentPalette';
@@ -40,167 +47,37 @@ import { StudioDataPanel } from '../../packages/studio-core/StudioDataPanel';
 import { PageInspector } from '../../packages/studio-core/PageInspector';
 import { SchemaOutline } from '../../packages/studio-core/SchemaOutline';
 
-// Helper to find container of an item
-const findContainer = (id: string, components: ComponentSchema[]): string | undefined => {
-    if (components.find(c => c.id === id)) return 'root-canvas';
-    for (const comp of components) {
-        if (comp.children) {
-            if (comp.children.find(c => c.id === id)) return comp.id;
-            const found = findContainer(id, comp.children);
-            if (found) return found;
-        }
-    }
-    return undefined;
-};
-
-const findComponentById = (components: ComponentSchema[], id: string): ComponentSchema | null => {
-    for (const comp of components) {
-        if (comp.id === id) return comp;
-        if (comp.children) {
-            const found = findComponentById(comp.children, id);
-            if (found) return found;
-        }
-    }
-    return null;
-};
-
-const updateComponentProps = (components: ComponentSchema[], id: string, newProps: any): ComponentSchema[] => {
-    return components.map(comp => {
-        if (comp.id === id) {
-            return { ...comp, props: { ...comp.props, ...newProps } };
-        }
-        if (comp.children) {
-            return { ...comp, children: updateComponentProps(comp.children, id, newProps) };
-        }
-        return comp;
-    });
-};
-
-const insertItem = (components: ComponentSchema[], containerId: string, item: ComponentSchema, index: number): ComponentSchema[] => {
-    if (containerId === 'root-canvas') {
-        const newComps = [...components];
-        newComps.splice(index, 0, item);
-        return newComps;
-    }
-    return components.map(comp => {
-        if (comp.id === containerId) {
-            const newChildren = [...(comp.children || [])];
-            newChildren.splice(index, 0, item);
-            return { ...comp, children: newChildren };
-        }
-        if (comp.children) {
-            return { ...comp, children: insertItem(comp.children, containerId, item, index) };
-        }
-        return comp;
-    });
-};
-
-const removeItem = (components: ComponentSchema[], id: string): ComponentSchema[] => {
-    return components.filter(c => c.id !== id).map(c => ({
-        ...c,
-        children: c.children ? removeItem(c.children, id) : []
-    }));
-};
-
-const moveItemInTree = (rootComponents: ComponentSchema[], activeId: string, overId: string) => {
-    let newComponents = [...rootComponents];
-    const sourceContainerId = findContainer(activeId, newComponents);
-    const overContainerId = findContainer(overId, newComponents) || (overId === 'root-canvas' ? 'root-canvas' : undefined);
-
-    if (!sourceContainerId || !overContainerId) return newComponents;
-
-    const activeItem = findComponentById(newComponents, activeId);
-    if (!activeItem) return newComponents;
-
-    newComponents = removeItem(newComponents, activeId);
-
-    const destContainer = overContainerId === 'root-canvas'
-        ? { children: newComponents }
-        : findComponentById(newComponents, overContainerId);
-
-    if (!destContainer) return newComponents;
-
-    const destItems = overContainerId === 'root-canvas' ? newComponents : (destContainer.children || []);
-    let newIndex = destItems.length;
-    if (overId !== overContainerId) {
-        const overIndex = destItems.findIndex(x => x.id === overId);
-        newIndex = overIndex >= 0 ? overIndex : destItems.length;
-    }
-
-    if (overContainerId === 'root-canvas') {
-        newComponents.splice(newIndex, 0, activeItem);
-    } else {
-        const updateContainerChildren = (comps: ComponentSchema[]): ComponentSchema[] => {
-            return comps.map(c => {
-                if (c.id === overContainerId) {
-                    const next = [...(c.children || [])];
-                    next.splice(newIndex, 0, activeItem);
-                    return { ...c, children: next };
-                }
-                if (c.children) return { ...c, children: updateContainerChildren(c.children) };
-                return c;
-            });
-        };
-        newComponents = updateContainerChildren(newComponents);
-    }
-    return newComponents;
-};
-
-const moveItemIntoContainer = (rootComponents: ComponentSchema[], activeId: string, targetContainerId: string) => {
-    let newComponents = [...rootComponents];
-    const activeItem = findComponentById(newComponents, activeId);
-    if (!activeItem) return newComponents;
-
-    // Prevent recursive dropping (dropping parent into child)
-    let check = findComponentById([activeItem], targetContainerId);
-    if (check) return newComponents;
-
-    newComponents = removeItem(newComponents, activeId);
-
-    const updateContainer = (comps: ComponentSchema[]): ComponentSchema[] => {
-        return comps.map(c => {
-            if (c.id === targetContainerId) {
-                return { ...c, children: [...(c.children || []), activeItem] };
-            }
-            if (c.children) return { ...c, children: updateContainer(c.children) };
-            return c;
-        });
-    };
-
-    // Check if moving to root
-    if (targetContainerId === 'root-canvas') {
-        newComponents.push(activeItem);
-        return newComponents;
-    }
-
-    return updateContainer(newComponents);
-};
-
-const deepCloneComponent = (comp: ComponentSchema): ComponentSchema => {
-    return {
-        ...comp,
-        id: `comp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        children: comp.children ? comp.children.map(deepCloneComponent) : undefined
-    };
+// Custom collision detection: pointerWithin for precision in nested containers,
+// fallback to rectIntersection for canvas-level drops
+const customCollisionDetection: CollisionDetection = (args) => {
+    // First try pointerWithin — best for nested containers
+    const pointerCollisions = pointerWithin(args);
+    if (pointerCollisions.length > 0) return pointerCollisions;
+    // Fallback to rectIntersection for edge cases
+    return rectIntersection(args);
 };
 
 function StudioContent() {
     const { t, language } = useTranslation();
-    const [schema, setSchema] = useState<AppSchema | null>(null);
+    const { schema, setSchema: pushSchema, initSchema, undo, redo, canUndo, canRedo } = useSchemaHistory();
     const [jsonText, setJsonText] = useState("");
     const [error, setError] = useState<string | null>(null);
     const [saveStatus, setSaveStatus] = useState<string | null>(null);
     const [activeDraggable, setActiveDraggable] = useState<any>(null);
     const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
+    const [dragOverId, setDragOverId] = useState<string | null>(null);
 
     // UI State
     const [leftPanelOpen, setLeftPanelOpen] = useState(true);
     const [rightPanelOpen, setRightPanelOpen] = useState(true);
     const [activeTab, setActiveTab] = useState<'components' | 'schema' | 'data' | 'outline'>('components');
+    const [activePageIndex, setActivePageIndex] = useState(0);
+    const [canvasWidth, setCanvasWidth] = useState('100%');
     const [leftWidth, setLeftWidth] = useState(300);
     const [rightWidth, setRightWidth] = useState(320);
     const [isResizingLeft, setIsResizingLeft] = useState(false);
     const [isResizingRight, setIsResizingRight] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -238,20 +115,71 @@ function StudioContent() {
 
     useEffect(() => {
         MockDB.getSchema().then(s => {
-            setSchema(s);
+            initSchema(s);
             setJsonText(JSON.stringify(s, null, 2));
         });
-    }, []);
+    }, [initSchema]);
 
     const updateSchema = (newSchema: AppSchema) => {
-        setSchema(newSchema);
+        pushSchema(newSchema);
         setJsonText(JSON.stringify(newSchema, null, 2));
     };
+
+    // Sync jsonText when undo/redo changes schema
+    useEffect(() => {
+        if (schema) {
+            setJsonText(JSON.stringify(schema, null, 2));
+        }
+    }, [schema]);
+
+    // Export schema as JSON file
+    const handleExport = useCallback(() => {
+        if (!schema) return;
+        const blob = new Blob([JSON.stringify(schema, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `antigravity-schema-${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setSaveStatus(t('studio.exportSuccess'));
+        setTimeout(() => setSaveStatus(null), 2000);
+    }, [schema, t]);
+
+    // Import schema from JSON file
+    const handleImport = useCallback(() => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    const parsed = JSON.parse(ev.target?.result as string);
+                    if (parsed.pages && parsed.initialState) {
+                        updateSchema(parsed);
+                        setSaveStatus(t('studio.importSuccess'));
+                        setTimeout(() => setSaveStatus(null), 2000);
+                    } else {
+                        setSaveStatus(t('studio.importError'));
+                        setTimeout(() => setSaveStatus(null), 3000);
+                    }
+                } catch {
+                    setSaveStatus(t('studio.importError'));
+                    setTimeout(() => setSaveStatus(null), 3000);
+                }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
+    }, [t]);
 
     const handleDelete = (id: string) => {
         if (!schema) return;
         const newPages = [...schema.pages];
-        newPages[0].components = removeItem(newPages[0].components, id);
+        newPages[activePageIndex].components = removeItem(newPages[activePageIndex].components, id);
         updateSchema({ ...schema, pages: newPages });
         setSelectedComponentId(null);
     };
@@ -259,14 +187,14 @@ function StudioContent() {
     const handlePropUpdate = (newProps: any) => {
         if (!schema || !selectedComponentId) return;
         const newPages = [...schema.pages];
-        newPages[0].components = updateComponentProps(newPages[0].components, selectedComponentId, newProps);
+        newPages[activePageIndex].components = updateComponentProps(newPages[activePageIndex].components, selectedComponentId, newProps);
         updateSchema({ ...schema, pages: newPages });
     };
 
     const handleUpdatePage = (updates: Partial<PageSchema>) => {
         if (!schema) return;
         const newPages = [...schema.pages];
-        newPages[0] = { ...newPages[0], ...updates };
+        newPages[activePageIndex] = { ...newPages[activePageIndex], ...updates };
         updateSchema({ ...schema, pages: newPages });
     };
 
@@ -301,11 +229,37 @@ function StudioContent() {
         setSelectedComponentId(null);
     };
 
+    const handleAddPage = () => {
+        if (!schema) return;
+        const newPage: PageSchema = {
+            id: `page-${Date.now()}`,
+            path: `/page-${schema.pages.length + 1}`,
+            components: [],
+            actions: []
+        };
+        updateSchema({ ...schema, pages: [...schema.pages, newPage] });
+        setActivePageIndex(schema.pages.length);
+        setSelectedComponentId(null);
+    };
+
+    const handleDeletePage = (index: number) => {
+        if (!schema || schema.pages.length <= 1) return;
+        const newPages = schema.pages.filter((_, i) => i !== index);
+        updateSchema({ ...schema, pages: newPages });
+        setActivePageIndex(Math.min(activePageIndex, newPages.length - 1));
+        setSelectedComponentId(null);
+    };
+
+    const handleSwitchPage = (index: number) => {
+        setActivePageIndex(index);
+        setSelectedComponentId(null);
+    };
+
     const handleJsonChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         setJsonText(e.target.value);
         try {
             const parsed = JSON.parse(e.target.value);
-            setSchema(parsed);
+            pushSchema(parsed);
             setError(null);
         } catch (err: any) {
             setError(err.message);
@@ -321,6 +275,30 @@ function StudioContent() {
         }
     };
 
+    // Keyboard shortcuts: Undo/Redo, Delete, Save
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const isMeta = e.metaKey || e.ctrlKey;
+            if (isMeta && e.key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                undo();
+            } else if (isMeta && e.key === 'z' && e.shiftKey) {
+                e.preventDefault();
+                redo();
+            } else if (isMeta && e.key === 's') {
+                e.preventDefault();
+                handleSave();
+            } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedComponentId && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
+                e.preventDefault();
+                handleDelete(selectedComponentId);
+            } else if (e.key === 'Escape') {
+                setSelectedComponentId(null);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [undo, redo, handleSave, selectedComponentId, handleDelete]);
+
     const handleDragStart = (event: DragStartEvent) => {
         const { active } = event;
         if (active.data.current?.type === 'new-component') {
@@ -331,11 +309,25 @@ function StudioContent() {
         }
     };
 
-    const handleDragOver = () => { };
+    const handleDragOver = (event: DragOverEvent) => {
+        const { over } = event;
+        if (!over || !schema) { setDragOverId(null); return; }
+        const overId = over.id as string;
+        const overComp = findComponentById(schema.pages[activePageIndex].components, overId);
+        if (overComp && (overComp.type === 'Container' || overComp.type === 'Card')) {
+            setDragOverId(overId);
+        } else if (overId === 'studio-canvas' || overId === 'root-canvas') {
+            setDragOverId('root-canvas');
+        } else {
+            const container = findContainer(overId, schema.pages[activePageIndex].components);
+            setDragOverId(container || null);
+        }
+    };
 
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
         setActiveDraggable(null);
+        setDragOverId(null);
         if (!over || !schema) return;
 
         if (active.data.current?.type === 'new-component' || active.data.current?.type === 'lib-component') {
@@ -343,16 +335,16 @@ function StudioContent() {
             const type = isLib ? null : active.data.current.componentType;
             let containerId = 'root-canvas';
             let index = -1;
-            const overComp = findComponentById(schema.pages[0].components, over.id as string);
+            const overComp = findComponentById(schema.pages[activePageIndex].components, over.id as string);
 
             if (over.id === 'studio-canvas' || over.id === 'root-canvas') {
                 containerId = 'root-canvas';
-                index = schema.pages[0].components.length;
-            } else if (overComp && overComp.type === 'Container') {
+                index = schema.pages[activePageIndex].components.length;
+            } else if (overComp && (overComp.type === 'Container' || overComp.type === 'Card')) {
                 containerId = overComp.id;
                 index = (overComp.children?.length || 0);
             } else {
-                const cont = findContainer(over.id as string, schema.pages[0].components);
+                const cont = findContainer(over.id as string, schema.pages[activePageIndex].components);
                 if (cont) containerId = cont;
             }
 
@@ -376,26 +368,33 @@ function StudioContent() {
 
             const newComponent = isLib ? deepCloneComponent(active.data.current.schema) : defaultComponent;
 
-            const newComponents = insertItem(schema.pages[0].components, containerId, newComponent, index < 0 ? 999 : index);
+            const newComponents = insertItem(schema.pages[activePageIndex].components, containerId, newComponent, index < 0 ? 999 : index);
             const newPages = [...schema.pages];
-            newPages[0] = { ...newPages[0], components: newComponents };
+            newPages[activePageIndex] = { ...newPages[activePageIndex], components: newComponents };
             updateSchema({ ...schema, pages: newPages });
             setSelectedComponentId(newComponent.id);
 
         } else if (active.id !== over.id) {
-            const overComp = findComponentById(schema.pages[0].components, over.id as string);
+            const overId = over.id as string;
+            const overComp = findComponentById(schema.pages[activePageIndex].components, overId);
 
-            // Nesting Logic: If dropping ON a Container/Card, move INSIDE
-            if (overComp && (overComp.type === 'Container' || overComp.type === 'Card')) {
-                const newComponents = moveItemIntoContainer(schema.pages[0].components, active.id as string, over.id as string);
+            if (overId === 'studio-canvas' || overId === 'root-canvas') {
+                // Dropping onto canvas root — move to root level
+                const newComponents = moveItemIntoContainer(schema.pages[activePageIndex].components, active.id as string, 'root-canvas');
                 const newPages = [...schema.pages];
-                newPages[0] = { ...newPages[0], components: newComponents };
+                newPages[activePageIndex] = { ...newPages[activePageIndex], components: newComponents };
+                updateSchema({ ...schema, pages: newPages });
+            } else if (overComp && (overComp.type === 'Container' || overComp.type === 'Card')) {
+                // Dropping ON a Container/Card — move INSIDE
+                const newComponents = moveItemIntoContainer(schema.pages[activePageIndex].components, active.id as string, overId);
+                const newPages = [...schema.pages];
+                newPages[activePageIndex] = { ...newPages[activePageIndex], components: newComponents };
                 updateSchema({ ...schema, pages: newPages });
             } else {
-                // Sorting Logic: Reorder relative to sibling
-                const newComponents = moveItemInTree(schema.pages[0].components, active.id as string, over.id as string);
+                // Sorting: Reorder relative to sibling
+                const newComponents = moveItemInTree(schema.pages[activePageIndex].components, active.id as string, overId);
                 const newPages = [...schema.pages];
-                newPages[0] = { ...newPages[0], components: newComponents };
+                newPages[activePageIndex] = { ...newPages[activePageIndex], components: newComponents };
                 updateSchema({ ...schema, pages: newPages });
             }
         }
@@ -412,13 +411,13 @@ function StudioContent() {
         </div>
     );
 
-    const activePage = schema.pages[0];
+    const activePage = schema.pages[activePageIndex];
     const selectedComponent = selectedComponentId ? findComponentById(activePage.components, selectedComponentId) : null;
 
     return (
         <DndContext
             sensors={sensors}
-            collisionDetection={closestCorners}
+            collisionDetection={customCollisionDetection}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
@@ -427,6 +426,20 @@ function StudioContent() {
                 <StudioHeader
                     pageTitle={activePage.path}
                     onSave={handleSave}
+                    onUndo={undo}
+                    onRedo={redo}
+                    canUndo={canUndo}
+                    canRedo={canRedo}
+                    onExport={handleExport}
+                    onImport={handleImport}
+                    saveStatus={saveStatus}
+                    pages={schema.pages}
+                    activePageIndex={activePageIndex}
+                    onSwitchPage={handleSwitchPage}
+                    onAddPage={handleAddPage}
+                    onDeletePage={handleDeletePage}
+                    canvasWidth={canvasWidth}
+                    onCanvasWidthChange={setCanvasWidth}
                 />
 
                 <main className="flex-1 flex overflow-hidden relative">
@@ -483,6 +496,8 @@ function StudioContent() {
                                             <div className="relative mb-4">
                                                 <Search size={14} className="absolute left-3 top-[10px] text-slate-400" />
                                                 <input
+                                                    value={searchQuery}
+                                                    onChange={e => setSearchQuery(e.target.value)}
                                                     placeholder={t('ui.searchPlaceholder')}
                                                     className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 transition-all placeholder:text-slate-400 py-2 pl-9 pr-4"
                                                 />
@@ -490,6 +505,7 @@ function StudioContent() {
                                             <ComponentPalette
                                                 customLibrary={schema.customLibrary || []}
                                                 onDeleteCustomComponent={handleDeleteCustomComponent}
+                                                searchQuery={searchQuery}
                                             />
                                         </motion.div>
                                     ) : activeTab === 'data' ? (
@@ -553,13 +569,14 @@ function StudioContent() {
 
                         <div className="flex-1 overflow-auto scroll-smooth custom-scrollbar relative z-10 p-8 flex justify-center" style={{ backgroundColor: activePage?.props?.backgroundColor, padding: activePage?.props?.padding }}>
                             <StoreProvider key={JSON.stringify(schema.initialState)} initialState={schema.initialState}>
-                                <StudioCanvas>
+                                <StudioCanvas maxWidth={canvasWidth}>
                                     <StudioRenderer
                                         schema={activePage}
                                         onSelect={(id) => setSelectedComponentId(id)}
                                         onUpdate={handlePropUpdate}
                                         onDelete={handleDelete}
                                         selectedId={selectedComponentId || undefined}
+                                        dragOverId={dragOverId || undefined}
                                     />
                                 </StudioCanvas>
                             </StoreProvider>
@@ -626,13 +643,18 @@ function StudioContent() {
 
                 <DragOverlay dropAnimation={null}>
                     {activeDraggable ? (
-                        <div className="bg-primary-600 text-white px-4 py-2 rounded-lg shadow-xl shadow-primary-600/30 border border-white/20 flex items-center gap-3 scale-105 backdrop-blur-sm cursor-grabbing">
-                            <div className="w-6 h-6 rounded bg-white/20 flex items-center justify-center">
-                                <Package size={14} className="text-white" />
+                        <div className="bg-white text-slate-900 px-4 py-3 rounded-xl shadow-2xl border border-primary-200 flex items-center gap-3 cursor-grabbing min-w-[140px]">
+                            <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center text-primary-600">
+                                <Package size={16} />
                             </div>
-                            <span className="text-[11px] font-bold uppercase tracking-widest">
-                                {activeDraggable.componentType || t('ui.moving')}
-                            </span>
+                            <div>
+                                <span className="text-xs font-bold text-slate-800 block">
+                                    {activeDraggable.componentType || t('ui.moving')}
+                                </span>
+                                <span className="text-[10px] text-slate-400">
+                                    {activeDraggable.type === 'new' ? 'New component' : 'Reorder'}
+                                </span>
+                            </div>
                         </div>
                     ) : null}
                 </DragOverlay>

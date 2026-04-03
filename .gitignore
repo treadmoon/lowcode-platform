@@ -3,6 +3,9 @@
 # dependencies
 /node_modules
 /.pnp
+
+# local data persistence
+/.data
 .pnp.*
 .yarn/*
 !.yarn/patches

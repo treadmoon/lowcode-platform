@@ -184,12 +184,19 @@ export const DraggableLibraryItem = ({ schemaItem, onDelete }: { schemaItem: { i
     );
 };
 
-export const ComponentPalette = ({ customLibrary = [], onDeleteCustomComponent }: { customLibrary?: { id: string, name: string, schema: ComponentSchema }[], onDeleteCustomComponent?: (id: string) => void }) => {
+export const ComponentPalette = ({ customLibrary = [], onDeleteCustomComponent, searchQuery = '' }: { customLibrary?: { id: string, name: string, schema: ComponentSchema }[], onDeleteCustomComponent?: (id: string) => void, searchQuery?: string }) => {
     const { t } = useTranslation();
+    const q = searchQuery.toLowerCase();
+    const filteredTypes = COMPONENT_TYPES.filter(c =>
+        !q || c.type.toLowerCase().includes(q) || c.label.toLowerCase().includes(q) || t(`components.${c.type}`).toLowerCase().includes(q)
+    );
+    const filteredLibrary = customLibrary.filter(item =>
+        !q || item.name.toLowerCase().includes(q)
+    );
     return (
         <div className="flex flex-col gap-4 p-2">
             <div className="grid grid-cols-2 gap-3">
-                {COMPONENT_TYPES.map(c => (
+                {filteredTypes.map(c => (
                     <DraggableComponentItem
                         key={c.type}
                         type={c.type}
@@ -199,7 +206,7 @@ export const ComponentPalette = ({ customLibrary = [], onDeleteCustomComponent }
                 ))}
             </div>
 
-            {customLibrary.length > 0 && (
+            {filteredLibrary.length > 0 && (
                 <>
                     <div className="mt-4 mb-2 flex flex-col gap-1">
                         <div className="text-xs font-bold text-slate-800 uppercase tracking-widest flex items-center gap-1">
@@ -209,7 +216,7 @@ export const ComponentPalette = ({ customLibrary = [], onDeleteCustomComponent }
                         <div className="h-[1px] bg-slate-200 w-full" />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                        {customLibrary.map(item => (
+                        {filteredLibrary.map(item => (
                             <DraggableLibraryItem key={item.id} schemaItem={item} onDelete={onDeleteCustomComponent} />
                         ))}
                     </div>

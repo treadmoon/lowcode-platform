@@ -3,33 +3,26 @@
 import React from 'react';
 import { useDroppable } from '@dnd-kit/core';
 
-export const StudioCanvas = ({ children }: { children: React.ReactNode }) => {
-    const { isOver, setNodeRef } = useDroppable({
-        id: 'studio-canvas',
-    });
+export const StudioCanvas = ({ children, maxWidth = '100%' }: { children: React.ReactNode, maxWidth?: string }) => {
+    const { isOver, setNodeRef } = useDroppable({ id: 'studio-canvas' });
 
     return (
         <div
             ref={setNodeRef}
-            className={`
-        w-full max-w-6xl bg-white rounded-xl shadow-2xl overflow-hidden border 
-        h-full min-h-[80vh] flex flex-col relative transition-all
-        ${isOver ? 'ring-4 ring-primary-500 border-primary-500/50' : 'border-slate-200'}
-      `}
+            className={`bg-white rounded-xl shadow-2xl overflow-hidden border h-full min-h-[80vh] flex flex-col relative transition-all duration-300 ${isOver ? 'ring-4 ring-primary-500 border-primary-500/50' : 'border-slate-200'}`}
+            style={{ width: '100%', maxWidth }}
         >
-            {/* Mock Browser Header */}
             <div className="h-6 bg-gray-100 border-b flex items-center px-3 gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-gray-300" />
-                <div className="w-2 h-2 rounded-full bg-gray-300" />
+                <div className="w-2 h-2 rounded-full bg-red-300" />
+                <div className="w-2 h-2 rounded-full bg-yellow-300" />
+                <div className="w-2 h-2 rounded-full bg-green-300" />
+                <span className="ml-2 text-[9px] text-slate-400 font-mono">{maxWidth === '100%' ? 'Desktop' : maxWidth}</span>
             </div>
-            {/* Content */}
             <div className="flex-1 overflow-auto bg-white text-black p-4 relative">
                 {children}
                 {isOver && (
-                    <div className="absolute inset-0 bg-neon-indigo/10 flex items-center justify-center pointer-events-none">
-                        <span className="bg-neon-indigo text-white px-3 py-1 rounded text-xs font-bold shadow-lg">
-                            Drop Here
-                        </span>
+                    <div className="absolute inset-0 bg-primary-500/10 flex items-center justify-center pointer-events-none">
+                        <span className="bg-primary-600 text-white px-3 py-1 rounded text-xs font-bold shadow-lg">Drop Here</span>
                     </div>
                 )}
             </div>

@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { PageSchema } from '../schema/types';
+import { sanitizeComponents } from '../schema/validate';
 import { SketchPicker } from 'react-color';
 import {
     Settings,
@@ -138,12 +139,12 @@ RULES:
 
                 if (firstBracket !== -1 && lastBracket !== -1 && lastBracket >= firstBracket) {
                     const jsonStr = output.substring(firstBracket, lastBracket + 1);
-                    const components = JSON.parse(jsonStr);
-                    if (Array.isArray(components)) {
+                    const components = sanitizeComponents(JSON.parse(jsonStr));
+                    if (components.length > 0) {
                         onUpdatePage({ components });
                         setPrompt('');
                     } else {
-                        setError("AI did not return a valid array of components.");
+                        setError("AI did not return valid components.");
                     }
                 } else {
                     setError("AI could not generate a valid layout structure.");
