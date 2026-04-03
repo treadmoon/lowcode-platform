@@ -176,60 +176,58 @@ function StudioContent() {
         input.click();
     }, [t]);
 
-    const handleDelete = (id: string) => {
+    const handleDelete = useCallback((id: string) => {
         if (!schema) return;
         const newPages = [...schema.pages];
         newPages[activePageIndex].components = removeItem(newPages[activePageIndex].components, id);
         updateSchema({ ...schema, pages: newPages });
         setSelectedComponentId(null);
-    };
+    }, [schema, activePageIndex, updateSchema]);
 
-    const handlePropUpdate = (newProps: any) => {
+    const handlePropUpdate = useCallback((newProps: Record<string, unknown>) => {
         if (!schema || !selectedComponentId) return;
         const newPages = [...schema.pages];
         newPages[activePageIndex].components = updateComponentProps(newPages[activePageIndex].components, selectedComponentId, newProps);
         updateSchema({ ...schema, pages: newPages });
-    };
+    }, [schema, activePageIndex, selectedComponentId, updateSchema]);
 
-    const handleUpdatePage = (updates: Partial<PageSchema>) => {
+    const handleUpdatePage = useCallback((updates: Partial<PageSchema>) => {
         if (!schema) return;
         const newPages = [...schema.pages];
         newPages[activePageIndex] = { ...newPages[activePageIndex], ...updates };
         updateSchema({ ...schema, pages: newPages });
-    };
+    }, [schema, activePageIndex, updateSchema]);
 
-    const handleAddCustomComponent = (component: ComponentSchema, name: string) => {
+    const handleAddCustomComponent = useCallback((component: ComponentSchema, name: string) => {
         if (!schema) return;
         const newLibrary = [...(schema.customLibrary || []), { id: `lib-${Date.now()}`, name, schema: component }];
         updateSchema({ ...schema, customLibrary: newLibrary });
-    };
+    }, [schema, updateSchema]);
 
-    const handleUpdateCustomComponent = (idOrName: string, newComponent: ComponentSchema) => {
+    const handleUpdateCustomComponent = useCallback((idOrName: string, newComponent: ComponentSchema) => {
         if (!schema || !schema.customLibrary) return;
         const index = schema.customLibrary.findIndex(c => c.id === idOrName || c.name === idOrName);
         if (index === -1) {
-            // Not found, so we just add it instead
             handleAddCustomComponent(newComponent, idOrName);
             return;
         }
         const newLibrary = [...schema.customLibrary];
         newLibrary[index] = { ...newLibrary[index], schema: newComponent };
         updateSchema({ ...schema, customLibrary: newLibrary });
-    };
+    }, [schema, updateSchema, handleAddCustomComponent]);
 
-    const handleDeleteCustomComponent = (id: string) => {
+    const handleDeleteCustomComponent = useCallback((id: string) => {
         if (!schema || !schema.customLibrary) return;
         const newLibrary = schema.customLibrary.filter(c => c.id !== id);
         updateSchema({ ...schema, customLibrary: newLibrary });
-    };
+    }, [schema, updateSchema]);
 
-    const handleClearElements = () => {
-        if (!schema) return;
+    const handleClearElements = useCallback(() => {
         handleUpdatePage({ components: [] });
         setSelectedComponentId(null);
-    };
+    }, [handleUpdatePage]);
 
-    const handleAddPage = () => {
+    const handleAddPage = useCallback(() => {
         if (!schema) return;
         const newPage: PageSchema = {
             id: `page-${Date.now()}`,
@@ -240,40 +238,40 @@ function StudioContent() {
         updateSchema({ ...schema, pages: [...schema.pages, newPage] });
         setActivePageIndex(schema.pages.length);
         setSelectedComponentId(null);
-    };
+    }, [schema, updateSchema]);
 
-    const handleDeletePage = (index: number) => {
+    const handleDeletePage = useCallback((index: number) => {
         if (!schema || schema.pages.length <= 1) return;
         const newPages = schema.pages.filter((_, i) => i !== index);
         updateSchema({ ...schema, pages: newPages });
         setActivePageIndex(Math.min(activePageIndex, newPages.length - 1));
         setSelectedComponentId(null);
-    };
+    }, [schema, activePageIndex, updateSchema]);
 
-    const handleSwitchPage = (index: number) => {
+    const handleSwitchPage = useCallback((index: number) => {
         setActivePageIndex(index);
         setSelectedComponentId(null);
-    };
+    }, []);
 
-    const handleJsonChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const handleJsonChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
         setJsonText(e.target.value);
         try {
             const parsed = JSON.parse(e.target.value);
             pushSchema(parsed);
             setError(null);
-        } catch (err: any) {
-            setError(err.message);
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Invalid JSON');
         }
-    };
+    }, [pushSchema]);
 
-    const handleSave = async () => {
+    const handleSave = useCallback(async () => {
         if (schema) {
             setSaveStatus(t('studio.saving'));
             await MockDB.saveSchema(schema);
             setSaveStatus(t('studio.saved'));
             setTimeout(() => setSaveStatus(null), 2000);
         }
-    };
+    }, [schema, t]);
 
     // Keyboard shortcuts: Undo/Redo, Delete, Save
     useEffect(() => {
@@ -299,7 +297,7 @@ function StudioContent() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [undo, redo, handleSave, selectedComponentId, handleDelete]);
 
-    const handleDragStart = (event: DragStartEvent) => {
+    const handleDragStart = useCallback((event: DragStartEvent) => {
         const { active } = event;
         if (active.data.current?.type === 'new-component') {
             setActiveDraggable({ type: 'new', ...active.data.current });
@@ -307,9 +305,9 @@ function StudioContent() {
             setActiveDraggable({ type: 'existing', ...active.data.current });
             setSelectedComponentId(active.id as string);
         }
-    };
+    }, []);
 
-    const handleDragOver = (event: DragOverEvent) => {
+    const handleDragOver = useCallback((event: DragOverEvent) => {
         const { over } = event;
         if (!over || !schema) { setDragOverId(null); return; }
         const overId = over.id as string;
@@ -322,9 +320,9 @@ function StudioContent() {
             const container = findContainer(overId, schema.pages[activePageIndex].components);
             setDragOverId(container || null);
         }
-    };
+    }, [schema, activePageIndex]);
 
-    const handleDragEnd = (event: DragEndEvent) => {
+    const handleDragEnd = useCallback((event: DragEndEvent) => {
         const { active, over } = event;
         setActiveDraggable(null);
         setDragOverId(null);
@@ -350,7 +348,7 @@ function StudioContent() {
 
             const defaultComponent: ComponentSchema = {
                 id: `comp-${Date.now()}`,
-                type: type as any,
+                type: type as 'Text' | 'Button' | 'Input' | 'Container' | 'Image' | 'Card' | 'Divider' | 'Checkbox' | 'Switch' | 'CustomComponent',
                 props: {
                     ...(type === 'Text' && { content: 'New Text Block' }),
                     ...(type === 'Button' && { text: 'Click Me' }),
@@ -398,7 +396,7 @@ function StudioContent() {
                 updateSchema({ ...schema, pages: newPages });
             }
         }
-    };
+    }, [schema, activePageIndex, updateSchema]);
 
     if (!schema) return (
         <div className="flex flex-col items-center justify-center h-screen bg-slate-50 gap-6">

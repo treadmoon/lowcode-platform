@@ -15,8 +15,49 @@ const MAX_PROMPT_LENGTH = 8000;
 // Maximum conversation history messages to keep
 const MAX_HISTORY_MESSAGES = 10;
 
-// Default system prompt
-const DEFAULT_SYSTEM_PROMPT = '你是一个低代码平台中的智能 AI 助手，精通前端开发，请使用中文回答问题，并尽可能提供对用户有帮助的页面结构构建或逻辑修改建议。';
+// Rate limiting: in-memory counter (use Redis in production)
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW = 60000; // 1 minute window
+const RATE_LIMIT_MAX = 20; // max 20 requests per window
+
+// Default system prompt with shot examples for stable output
+const DEFAULT_SYSTEM_PROMPT = `你是一个低代码平台中的智能 AI 助手，精通前端开发，请使用中文回答问题，并尽可能提供对用户有帮助的页面结构构建或逻辑修改建议。
+
+你必须严格遵循以下 JSON 输出格式，不要添加任何 Markdown 代码块标记。
+
+【示例 1 - 生成页面布局】
+当用户要求生成布局时，回复：
+[{"id":"comp-001","type":"Container","props":{"className":"p-6 bg-slate-50 min-h-screen"},"children":[{"id":"comp-002","type":"Text","props":{"className":"text-2xl font-bold text-slate-900","content":"标题文本"}}]}]
+
+【示例 2 - 创建可复用组件】
+当用户要求创建组件时，回复：
+{"intent":"create_reusable","name":"轮播图","component":{"id":"comp-001","type":"Container","props":{"className":"flex gap-4"},"children":[]}}
+
+interface ComponentSchema {
+  id: string;
+  type: "Text" | "Button" | "Input" | "Container" | "Image" | "Card" | "Divider" | "Checkbox" | "Switch" | "CustomComponent";
+  props: Record<string, any>;
+  children?: ComponentSchema[];
+}`;
+
+// Check rate limit
+function checkRateLimit(ip: string): { allowed: boolean; remaining: number; resetAt: number } {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+
+  if (!entry || now > entry.resetAt) {
+    const resetAt = now + RATE_LIMIT_WINDOW;
+    rateLimitMap.set(ip, { count: 1, resetAt });
+    return { allowed: true, remaining: RATE_LIMIT_MAX - 1, resetAt };
+  }
+
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return { allowed: false, remaining: 0, resetAt: entry.resetAt };
+  }
+
+  entry.count++;
+  return { allowed: true, remaining: RATE_LIMIT_MAX - entry.count, resetAt: entry.resetAt };
+}
 
 // Truncate text with warning
 function truncateWithWarning(text: string, maxLength: number): string {
@@ -26,8 +67,18 @@ function truncateWithWarning(text: string, maxLength: number): string {
 
 export async function POST(req: Request) {
   try {
+    // Rate limit check
+    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    const rateLimit = checkRateLimit(ip);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: '请求过于频繁', message: '请稍后再试', retryAfter: Math.ceil((rateLimit.resetAt - Date.now()) / 1000) },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil((rateLimit.resetAt - Date.now()) / 1000)) } }
+      );
+    }
+
     const body = await req.json();
-    const { prompt, systemPrompt, userMessage, messages: historyMessages } = body;
+    const { prompt, systemPrompt, userMessage, messages: historyMessages, stream } = body;
 
     // API Key missing - return 503 Service Unavailable
     if (!process.env.VOLCENGINE_API_KEY) {
@@ -84,6 +135,47 @@ export async function POST(req: Request) {
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
     try {
+      // Streaming mode
+      if (stream === true) {
+        const stream = await openai.chat.completions.create({
+          model: modelEndpoint,
+          messages,
+          stream: true,
+        }, {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        // Create SSE stream
+        const encoder = new TextEncoder();
+        const streamResp = new ReadableStream({
+          async start(controller) {
+            try {
+              for await (const chunk of stream) {
+                const content = chunk.choices[0]?.delta?.content || '';
+                if (content) {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
+                }
+              }
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
+              controller.close();
+            } catch (e) {
+              controller.error(e);
+            }
+          }
+        });
+
+        return new Response(streamResp, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-RateLimit-Remaining': String(rateLimit.remaining),
+          },
+        });
+      }
+
+      // Non-streaming mode (fallback)
       const completion = await openai.chat.completions.create({
         model: modelEndpoint,
         messages,
@@ -95,8 +187,9 @@ export async function POST(req: Request) {
       const result = completion.choices[0]?.message?.content || 'AI 没有返回响应';
       return NextResponse.json({
         result,
-        // Return truncated length info if applicable
         truncated: currentUserMessage.length > MAX_PROMPT_LENGTH
+      }, {
+        headers: { 'X-RateLimit-Remaining': String(rateLimit.remaining) }
       });
     } catch (abortError: any) {
       clearTimeout(timeoutId);

@@ -133,7 +133,11 @@ const translations = {
             thinking: "thinking...",
             openAI: "Open AI Assistant",
             closeAI: "Close AI Assistant",
-            send: "Send message"
+            send: "Send message",
+            cancel: "Cancel",
+            apply: "Apply",
+            previewTitle: "Review Generated Components",
+            reviewGenerated: "AI has generated components. Please review before applying."
         }
     },
     zh: {
@@ -264,7 +268,11 @@ const translations = {
             thinking: "正在思考...",
             openAI: "打开 AI 助手",
             closeAI: "关闭 AI 助手",
-            send: "发送消息"
+            send: "发送消息",
+            cancel: "取消",
+            apply: "应用",
+            previewTitle: "预览生成的组件",
+            reviewGenerated: "AI 已生成组件，请在应用前预览确认。"
         }
     }
 };
