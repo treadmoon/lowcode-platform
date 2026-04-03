@@ -27,7 +27,18 @@ const translations = {
             openRuntime: "OPEN RUNTIME",
             error: "Syntax Error",
             workspace: "Workspace",
-            untitled: "Untitled Page"
+            untitled: "Untitled Page",
+            undo: "Undo",
+            redo: "Redo",
+            exportSchema: "Export",
+            importSchema: "Import",
+            exportSuccess: "Schema exported successfully!",
+            importSuccess: "Schema imported successfully!",
+            importError: "Failed to import: invalid JSON file",
+            addPage: "New Page",
+            deletePage: "Delete Page",
+            deletePageConfirm: "Delete this page? This cannot be undone.",
+            pageNamePlaceholder: "Page path, e.g. /about"
         },
         runtime: {
             title: "Runtime Preview",
@@ -118,7 +129,11 @@ const translations = {
             defaultGreeting: "You can ask me to analyze the page structure or suggest improvements!",
             layoutApplied: "I have generated and applied the corresponding component layout for you!",
             networkError: "Sorry, an error occurred while connecting to Volcengine.",
-            inputPlaceholder: "Type a message..."
+            inputPlaceholder: "Type a message...",
+            thinking: "thinking...",
+            openAI: "Open AI Assistant",
+            closeAI: "Close AI Assistant",
+            send: "Send message"
         }
     },
     zh: {
@@ -143,7 +158,18 @@ const translations = {
             openRuntime: "打开运行态",
             error: "语法错误",
             workspace: "工作区",
-            untitled: "未命名页面"
+            untitled: "未命名页面",
+            undo: "撤销",
+            redo: "重做",
+            exportSchema: "导出",
+            importSchema: "导入",
+            exportSuccess: "Schema 导出成功！",
+            importSuccess: "Schema 导入成功！",
+            importError: "导入失败：无效的 JSON 文件",
+            addPage: "新建页面",
+            deletePage: "删除页面",
+            deletePageConfirm: "确定删除此页面？此操作无法撤销。",
+            pageNamePlaceholder: "页面路径，例如 /about"
         },
         runtime: {
             title: "运行态预览",
@@ -234,7 +260,11 @@ const translations = {
             defaultGreeting: "你可以让我分析页面结构，或提出改进建议！",
             layoutApplied: "我已经为您生成并应用了相应的组件布局！",
             networkError: "抱歉，连接火山引擎时发生错误。",
-            inputPlaceholder: "输入消息..."
+            inputPlaceholder: "输入消息...",
+            thinking: "正在思考...",
+            openAI: "打开 AI 助手",
+            closeAI: "关闭 AI 助手",
+            send: "发送消息"
         }
     }
 };
