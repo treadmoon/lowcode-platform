@@ -171,12 +171,14 @@ const renderComponentPreview = (comp: ComponentSchema, depth = 0): React.ReactNo
 // Inline Component Preview Card (non-blocking)
 const ComponentPreviewCard = ({
     components,
-    onApply,
+    onApplyToPage,
+    onAddToLibrary,
     onDiscard,
     isGenerating = false
 }: {
     components: ComponentSchema[];
-    onApply: () => void;
+    onApplyToPage: () => void;
+    onAddToLibrary: () => void;
     onDiscard: () => void;
     isGenerating?: boolean;
 }) => {
@@ -231,24 +233,29 @@ const ComponentPreviewCard = ({
             </AnimatePresence>
 
             {/* Actions */}
-            {!isGenerating && (
-                <div className="px-4 py-3 bg-white border-t border-slate-100 flex gap-2 justify-end">
-                    <button
-                        onClick={onDiscard}
-                        className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-1"
-                    >
-                        <Trash2 size={12} />
-                        忽略
-                    </button>
-                    <button
-                        onClick={onApply}
-                        className="px-3 py-1.5 text-xs font-medium bg-primary-600 text-white hover:bg-primary-700 rounded-lg transition-colors flex items-center gap-1"
-                    >
-                        <Plus size={12} />
-                        添加到页面
-                    </button>
-                </div>
-            )}
+            <div className="px-4 py-3 bg-white border-t border-slate-100 flex gap-2 justify-end">
+                <button
+                    onClick={onDiscard}
+                    className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-1"
+                >
+                    <Trash2 size={12} />
+                    忽略
+                </button>
+                <button
+                    onClick={onAddToLibrary}
+                    className="px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-1 border border-slate-200"
+                >
+                    <Plus size={12} />
+                    收藏到库
+                </button>
+                <button
+                    onClick={onApplyToPage}
+                    className="px-3 py-1.5 text-xs font-medium bg-primary-600 text-white hover:bg-primary-700 rounded-lg transition-colors flex items-center gap-1"
+                >
+                    <Plus size={12} />
+                    应用到页面
+                </button>
+            </div>
         </motion.div>
     );
 };
@@ -310,18 +317,25 @@ export const AICopilotPanel = ({ schema, onUpdatePage, onAddCustomComponent, onU
         };
     };
 
-    const handleApplyPreview = () => {
-        if (!previewComponents) return;
+    const handleApplyToPage = () => {
+        if (!previewComponents || !onUpdatePage) return;
+
+        // Apply components directly to page canvas
+        const convertedComponents = previewComponents.map(convertToSupported);
+        onUpdatePage(convertedComponents);
+        setMessages(prev => [...prev, { role: 'ai', content: `已应用到页面，生成 ${convertedComponents.length} 个组件` }]);
+
+        setPreviewComponents(null);
+        setPreviewAction(null);
+        setPreviewName('');
+    };
+
+    const handleAddToLibrary = () => {
+        if (!previewComponents || !onAddCustomComponent) return;
 
         const convertedComponents = previewComponents.map(convertToSupported);
-
-        if (previewAction === 'page' && onUpdatePage) {
-            onUpdatePage(convertedComponents);
-            setMessages(prev => [...prev, { role: 'ai', content: t('aiCopilot.layoutApplied') }]);
-        } else if (previewAction === 'custom' && onAddCustomComponent) {
-            onAddCustomComponent(convertedComponents[0], previewName);
-            setMessages(prev => [...prev, { role: 'ai', content: `已添加到组件库：【${previewName}】` }]);
-        }
+        onAddCustomComponent(convertedComponents[0], previewName);
+        setMessages(prev => [...prev, { role: 'ai', content: `已收藏到组件库:【${previewName}】，你可以在左侧组件库中找到它` }]);
 
         setPreviewComponents(null);
         setPreviewAction(null);
@@ -444,7 +458,23 @@ export const AICopilotPanel = ({ schema, onUpdatePage, onAddCustomComponent, onU
                                     if (detected && detected.length > 0) {
                                         hasDetectedComponents = true;
                                         setPreviewComponents(detected);
-                                        setPreviewAction('page');
+                                        setPreviewAction('custom');
+                                        // Extract name from first Text content found
+                                        const firstComp = detected[0];
+                                        const extractName = (comp: ComponentSchema): string | null => {
+                                            if (comp.type === 'Text' && comp.props?.content) {
+                                                const content = comp.props.content.trim();
+                                                if (content.length >= 2 && content.length <= 20) return content;
+                                            }
+                                            if (comp.children?.length) {
+                                                for (const child of comp.children) {
+                                                    const name = extractName(child);
+                                                    if (name) return name;
+                                                }
+                                            }
+                                            return null;
+                                        };
+                                        setPreviewName(extractName(firstComp) || 'AI组件');
                                     }
                                 }
                             }
@@ -463,13 +493,50 @@ export const AICopilotPanel = ({ schema, onUpdatePage, onAddCustomComponent, onU
             setStreamingDone(true);
             setStreamingContent('');
 
-            // Final parse - check if we already have preview, otherwise add as regular message
+            // Final parse - set preview components for UI display
             const finalParsed = parseComponents(fullContent);
             if (finalParsed && finalParsed.length > 0) {
-                if (!previewComponents) {
-                    setPreviewComponents(finalParsed);
-                    setPreviewAction('page');
+                // Always add to component library (custom) for reuse
+                setPreviewComponents(finalParsed);
+                setPreviewAction('custom');
+                // Auto-generate a name by analyzing component content
+                const firstComp = finalParsed[0];
+                let autoName = 'AI组件';
+
+                // Try to extract a meaningful name from the component tree
+                const extractName = (comp: ComponentSchema): string | null => {
+                    // Check Text components for meaningful content
+                    if (comp.type === 'Text' && comp.props?.content) {
+                        const content = comp.props.content.trim();
+                        if (content.length >= 2 && content.length <= 20) {
+                            return content;
+                        }
+                    }
+                    // Check children recursively
+                    if (comp.children?.length) {
+                        for (const child of comp.children) {
+                            const name = extractName(child);
+                            if (name) return name;
+                        }
+                    }
+                    return null;
+                };
+
+                const extractedName = extractName(firstComp);
+                if (extractedName) {
+                    autoName = extractedName;
+                } else if (firstComp.type === 'Card') {
+                    autoName = '卡片组件';
+                } else if (firstComp.type === 'Button') {
+                    autoName = '按钮组件';
+                } else if (firstComp.type === 'Input') {
+                    autoName = '输入组件';
+                } else if (firstComp.type === 'CustomComponent') {
+                    autoName = firstComp.props?.title || '自定义组件';
+                } else if (firstComp.children?.length === 0) {
+                    autoName = '空白容器';
                 }
+                setPreviewName(autoName);
             } else if (fullContent.trim()) {
                 setMessages(prev => [...prev, { role: 'ai', content: fullContent }]);
             }
@@ -531,7 +598,8 @@ export const AICopilotPanel = ({ schema, onUpdatePage, onAddCustomComponent, onU
                                 {previewComponents && (
                                     <ComponentPreviewCard
                                         components={previewComponents}
-                                        onApply={handleApplyPreview}
+                                        onApplyToPage={handleApplyToPage}
+                                        onAddToLibrary={handleAddToLibrary}
                                         onDiscard={handleDiscardPreview}
                                         isGenerating={isLoading && !streamingDone}
                                     />
